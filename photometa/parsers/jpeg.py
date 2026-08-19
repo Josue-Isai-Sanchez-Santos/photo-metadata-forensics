@@ -17,6 +17,7 @@ class JpegSegment:
     declared_length: int | None = None
     payload_length: int = 0
     is_exif: bool = False
+    payload: bytes = b""
 
     @property
     def marker_hex(self) -> str:
@@ -222,6 +223,7 @@ def iter_jpeg_segments(
                 declared_length=declared_length,
                 payload_length=payload_length,
                 is_exif=is_exif,
+                payload=payload,
             )
 
             #
