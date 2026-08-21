@@ -1,10 +1,62 @@
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass
+from fractions import Fraction
+from typing import TypeAlias
 
 
 class TiffParserError(Exception):
     """Base exception for TIFF/EXIF parsing errors."""
+
+
+TIFF_TYPE_SIZES: dict[int, int] = {
+    1: 1,   # BYTE
+    2: 1,   # ASCII
+    3: 2,   # SHORT
+    4: 4,   # LONG
+    5: 8,   # RATIONAL
+    6: 1,   # SBYTE
+    7: 1,   # UNDEFINED
+    8: 2,   # SSHORT
+    9: 4,   # SLONG
+    10: 8,  # SRATIONAL
+    11: 4,  # FLOAT
+    12: 8,  # DOUBLE
+}
+
+
+TIFF_TYPE_NAMES: dict[int, str] = {
+    1: "BYTE",
+    2: "ASCII",
+    3: "SHORT",
+    4: "LONG",
+    5: "RATIONAL",
+    6: "SBYTE",
+    7: "UNDEFINED",
+    8: "SSHORT",
+    9: "SLONG",
+    10: "SRATIONAL",
+    11: "FLOAT",
+    12: "DOUBLE",
+}
+
+
+DecodedTiffScalar: TypeAlias = (
+    int
+    | float
+    | str
+    | bytes
+    | Fraction
+)
+
+
+DecodedTiffValue: TypeAlias = (
+    DecodedTiffScalar
+    | tuple[int, ...]
+    | tuple[float, ...]
+    | tuple[Fraction, ...]
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +85,13 @@ class IfdEntry:
     def tag_hex(self) -> str:
         return f"0x{self.tag:04X}"
 
+    @property
+    def field_type_name(self) -> str:
+        return TIFF_TYPE_NAMES.get(
+            self.field_type,
+            f"UNKNOWN_{self.field_type}",
+        )
+
 
 @dataclass(frozen=True)
 class Ifd:
@@ -45,11 +104,9 @@ def parse_tiff_header(data: bytes) -> TiffHeader:
     """
     Interpreta los primeros 8 bytes de una estructura TIFF.
 
-    TIFF header:
-
-        Bytes 0-1: byte order
-        Bytes 2-3: magic number (42)
-        Bytes 4-7: offset del primer IFD
+    Bytes 0-1: byte order
+    Bytes 2-3: magic number (42)
+    Bytes 4-7: offset del primer IFD
     """
 
     if len(data) < 8:
@@ -107,14 +164,11 @@ def parse_ifd(
     Estructura:
 
         2 bytes   número de entradas
-        N * 12    entradas
+        N * 12    entradas IFD
         4 bytes   offset del siguiente IFD
     """
 
-    if byte_order not in {"little", "big"}:
-        raise TiffParserError(
-            f"Byte order inválido: {byte_order!r}."
-        )
+    _validate_byte_order(byte_order)
 
     if offset < 0:
         raise TiffParserError(
@@ -134,8 +188,16 @@ def parse_ifd(
 
     entries_start = offset + 2
     entries_size = entry_count * 12
-    next_ifd_position = entries_start + entries_size
-    required_size = next_ifd_position + 4
+
+    next_ifd_position = (
+        entries_start
+        + entries_size
+    )
+
+    required_size = (
+        next_ifd_position
+        + 4
+    )
 
     if required_size > len(data):
         raise TiffParserError(
@@ -148,25 +210,38 @@ def parse_ifd(
 
     for index in range(entry_count):
 
-        entry_offset = entries_start + (index * 12)
+        entry_offset = (
+            entries_start
+            + (index * 12)
+        )
 
         tag = int.from_bytes(
-            data[entry_offset:entry_offset + 2],
+            data[
+                entry_offset:
+                entry_offset + 2
+            ],
             byteorder=byte_order,
         )
 
         field_type = int.from_bytes(
-            data[entry_offset + 2:entry_offset + 4],
+            data[
+                entry_offset + 2:
+                entry_offset + 4
+            ],
             byteorder=byte_order,
         )
 
         count = int.from_bytes(
-            data[entry_offset + 4:entry_offset + 8],
+            data[
+                entry_offset + 4:
+                entry_offset + 8
+            ],
             byteorder=byte_order,
         )
 
         value_or_offset = data[
-            entry_offset + 8:entry_offset + 12
+            entry_offset + 8:
+            entry_offset + 12
         ]
 
         entries.append(
@@ -190,4 +265,425 @@ def parse_ifd(
         offset=offset,
         entries=tuple(entries),
         next_ifd_offset=next_ifd_offset,
+    )
+
+
+def get_ifd_entry_data_size(
+    entry: IfdEntry,
+) -> int:
+    """
+    Calcula cuántos bytes ocupa el valor
+    completo de una entrada IFD.
+    """
+
+    type_size = TIFF_TYPE_SIZES.get(
+        entry.field_type
+    )
+
+    if type_size is None:
+        raise TiffParserError(
+            "Tipo TIFF no soportado: "
+            f"{entry.field_type}."
+        )
+
+    return type_size * entry.count
+
+
+def get_ifd_entry_raw_value(
+    data: bytes,
+    entry: IfdEntry,
+    byte_order: str,
+) -> bytes:
+    """
+    Obtiene los bytes reales asociados a una
+    entrada IFD.
+
+    Si ocupan 4 bytes o menos:
+        Value/Offset contiene el valor.
+
+    Si ocupan más de 4 bytes:
+        Value/Offset contiene un offset relativo
+        al comienzo de la estructura TIFF.
+    """
+
+    _validate_byte_order(byte_order)
+
+    if len(entry.value_or_offset) != 4:
+        raise TiffParserError(
+            "El campo Value/Offset de una entrada IFD "
+            "debe contener exactamente 4 bytes."
+        )
+
+    data_size = get_ifd_entry_data_size(
+        entry
+    )
+
+    if data_size <= 4:
+        return entry.value_or_offset[
+            :data_size
+        ]
+
+    value_offset = int.from_bytes(
+        entry.value_or_offset,
+        byteorder=byte_order,
+    )
+
+    value_end = (
+        value_offset
+        + data_size
+    )
+
+    if value_end > len(data):
+        raise TiffParserError(
+            "El valor TIFF está fuera de los límites "
+            "de la estructura TIFF: "
+            f"offset={value_offset}, "
+            f"tamaño={data_size}, "
+            f"longitud={len(data)}."
+        )
+
+    return data[
+        value_offset:value_end
+    ]
+
+
+def decode_ascii_value(
+    raw_value: bytes,
+) -> str:
+    """
+    Convierte bytes TIFF ASCII a str.
+    """
+
+    cleaned = raw_value.rstrip(
+        b"\x00"
+    )
+
+    try:
+        return cleaned.decode(
+            "ascii"
+        )
+
+    except UnicodeDecodeError as exc:
+        raise TiffParserError(
+            "El valor declarado como ASCII "
+            "contiene bytes no ASCII."
+        ) from exc
+
+
+def decode_ifd_value(
+    data: bytes,
+    entry: IfdEntry,
+    byte_order: str,
+) -> DecodedTiffValue:
+    """
+    Interpreta automáticamente una entrada IFD.
+
+    Count = 1:
+        devuelve un valor escalar.
+
+    Count > 1:
+        devuelve una tupla, excepto:
+
+        ASCII -> str
+        UNDEFINED -> bytes
+    """
+
+    _validate_byte_order(
+        byte_order
+    )
+
+    raw = get_ifd_entry_raw_value(
+        data,
+        entry,
+        byte_order,
+    )
+
+    field_type = entry.field_type
+
+    if field_type == 1:
+        # BYTE
+        return _collapse(
+            tuple(raw)
+        )
+
+    if field_type == 2:
+        # ASCII
+        return decode_ascii_value(
+            raw
+        )
+
+    if field_type == 3:
+        # SHORT
+        return _decode_integer_components(
+            raw,
+            component_size=2,
+            byte_order=byte_order,
+            signed=False,
+        )
+
+    if field_type == 4:
+        # LONG
+        return _decode_integer_components(
+            raw,
+            component_size=4,
+            byte_order=byte_order,
+            signed=False,
+        )
+
+    if field_type == 5:
+        # RATIONAL
+        return _decode_rational_components(
+            raw,
+            byte_order=byte_order,
+            signed=False,
+        )
+
+    if field_type == 6:
+        # SBYTE
+        values = tuple(
+            int.from_bytes(
+                raw[index:index + 1],
+                byteorder=byte_order,
+                signed=True,
+            )
+            for index in range(
+                len(raw)
+            )
+        )
+
+        return _collapse(
+            values
+        )
+
+    if field_type == 7:
+        # UNDEFINED
+        return raw
+
+    if field_type == 8:
+        # SSHORT
+        return _decode_integer_components(
+            raw,
+            component_size=2,
+            byte_order=byte_order,
+            signed=True,
+        )
+
+    if field_type == 9:
+        # SLONG
+        return _decode_integer_components(
+            raw,
+            component_size=4,
+            byte_order=byte_order,
+            signed=True,
+        )
+
+    if field_type == 10:
+        # SRATIONAL
+        return _decode_rational_components(
+            raw,
+            byte_order=byte_order,
+            signed=True,
+        )
+
+    if field_type == 11:
+        # FLOAT
+        return _decode_float_components(
+            raw,
+            component_size=4,
+            byte_order=byte_order,
+        )
+
+    if field_type == 12:
+        # DOUBLE
+        return _decode_float_components(
+            raw,
+            component_size=8,
+            byte_order=byte_order,
+        )
+
+    raise TiffParserError(
+        "Tipo TIFF no soportado: "
+        f"{field_type}."
+    )
+
+
+def _validate_byte_order(
+    byte_order: str,
+) -> None:
+
+    if byte_order not in {
+        "little",
+        "big",
+    }:
+        raise TiffParserError(
+            f"Byte order inválido: "
+            f"{byte_order!r}."
+        )
+
+
+def _collapse(
+    values: tuple[int, ...]
+    | tuple[float, ...]
+    | tuple[Fraction, ...],
+) -> (
+    int
+    | float
+    | Fraction
+    | tuple[int, ...]
+    | tuple[float, ...]
+    | tuple[Fraction, ...]
+):
+
+    if len(values) == 1:
+        return values[0]
+
+    return values
+
+
+def _decode_integer_components(
+    raw: bytes,
+    component_size: int,
+    byte_order: str,
+    signed: bool,
+) -> (
+    int
+    | tuple[int, ...]
+):
+
+    if len(raw) % component_size != 0:
+        raise TiffParserError(
+            "El tamaño del valor TIFF "
+            "no coincide con el tipo declarado."
+        )
+
+    values = tuple(
+        int.from_bytes(
+            raw[
+                index:
+                index + component_size
+            ],
+            byteorder=byte_order,
+            signed=signed,
+        )
+        for index in range(
+            0,
+            len(raw),
+            component_size,
+        )
+    )
+
+    return _collapse(
+        values
+    )
+
+
+def _decode_rational_components(
+    raw: bytes,
+    byte_order: str,
+    signed: bool,
+) -> (
+    Fraction
+    | tuple[Fraction, ...]
+):
+
+    if len(raw) % 8 != 0:
+        raise TiffParserError(
+            "Un valor RATIONAL/SRATIONAL "
+            "debe ocupar múltiplos de 8 bytes."
+        )
+
+    values: list[Fraction] = []
+
+    for index in range(
+        0,
+        len(raw),
+        8,
+    ):
+
+        numerator = int.from_bytes(
+            raw[
+                index:
+                index + 4
+            ],
+            byteorder=byte_order,
+            signed=signed,
+        )
+
+        denominator = int.from_bytes(
+            raw[
+                index + 4:
+                index + 8
+            ],
+            byteorder=byte_order,
+            signed=signed,
+        )
+
+        if denominator == 0:
+            raise TiffParserError(
+                "RATIONAL/SRATIONAL inválido: "
+                "el denominador no puede ser 0."
+            )
+
+        values.append(
+            Fraction(
+                numerator,
+                denominator,
+            )
+        )
+
+    return _collapse(
+        tuple(values)
+    )
+
+
+def _decode_float_components(
+    raw: bytes,
+    component_size: int,
+    byte_order: str,
+) -> (
+    float
+    | tuple[float, ...]
+):
+
+    if len(raw) % component_size != 0:
+        raise TiffParserError(
+            "El tamaño del valor FLOAT/DOUBLE "
+            "no coincide con el tipo declarado."
+        )
+
+    prefix = (
+        "<"
+        if byte_order == "little"
+        else ">"
+    )
+
+    if component_size == 4:
+        format_code = "f"
+
+    elif component_size == 8:
+        format_code = "d"
+
+    else:
+        raise TiffParserError(
+            "Tamaño FLOAT/DOUBLE "
+            "no soportado."
+        )
+
+    values = tuple(
+        struct.unpack(
+            prefix + format_code,
+            raw[
+                index:
+                index + component_size
+            ],
+        )[0]
+        for index in range(
+            0,
+            len(raw),
+            component_size,
+        )
+    )
+
+    return _collapse(
+        values
     )
