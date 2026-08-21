@@ -22,6 +22,25 @@ class TiffHeader:
         return "Big-endian (Motorola / MM)"
 
 
+@dataclass(frozen=True)
+class IfdEntry:
+    tag: int
+    field_type: int
+    count: int
+    value_or_offset: bytes
+
+    @property
+    def tag_hex(self) -> str:
+        return f"0x{self.tag:04X}"
+
+
+@dataclass(frozen=True)
+class Ifd:
+    offset: int
+    entries: tuple[IfdEntry, ...]
+    next_ifd_offset: int
+
+
 def parse_tiff_header(data: bytes) -> TiffHeader:
     """
     Interpreta los primeros 8 bytes de una estructura TIFF.
@@ -74,4 +93,101 @@ def parse_tiff_header(data: bytes) -> TiffHeader:
         byte_order=byte_order,
         magic_number=magic_number,
         first_ifd_offset=first_ifd_offset,
+    )
+
+
+def parse_ifd(
+    data: bytes,
+    offset: int,
+    byte_order: str,
+) -> Ifd:
+    """
+    Interpreta un Image File Directory (IFD).
+
+    Estructura:
+
+        2 bytes   número de entradas
+        N * 12    entradas
+        4 bytes   offset del siguiente IFD
+    """
+
+    if byte_order not in {"little", "big"}:
+        raise TiffParserError(
+            f"Byte order inválido: {byte_order!r}."
+        )
+
+    if offset < 0:
+        raise TiffParserError(
+            "El offset del IFD no puede ser negativo."
+        )
+
+    if offset + 2 > len(data):
+        raise TiffParserError(
+            f"El offset IFD {offset} está fuera "
+            "de los límites del TIFF."
+        )
+
+    entry_count = int.from_bytes(
+        data[offset:offset + 2],
+        byteorder=byte_order,
+    )
+
+    entries_start = offset + 2
+    entries_size = entry_count * 12
+    next_ifd_position = entries_start + entries_size
+    required_size = next_ifd_position + 4
+
+    if required_size > len(data):
+        raise TiffParserError(
+            "El IFD está truncado: "
+            f"declara {entry_count} entradas, "
+            "pero no hay suficientes bytes."
+        )
+
+    entries: list[IfdEntry] = []
+
+    for index in range(entry_count):
+
+        entry_offset = entries_start + (index * 12)
+
+        tag = int.from_bytes(
+            data[entry_offset:entry_offset + 2],
+            byteorder=byte_order,
+        )
+
+        field_type = int.from_bytes(
+            data[entry_offset + 2:entry_offset + 4],
+            byteorder=byte_order,
+        )
+
+        count = int.from_bytes(
+            data[entry_offset + 4:entry_offset + 8],
+            byteorder=byte_order,
+        )
+
+        value_or_offset = data[
+            entry_offset + 8:entry_offset + 12
+        ]
+
+        entries.append(
+            IfdEntry(
+                tag=tag,
+                field_type=field_type,
+                count=count,
+                value_or_offset=value_or_offset,
+            )
+        )
+
+    next_ifd_offset = int.from_bytes(
+        data[
+            next_ifd_position:
+            next_ifd_position + 4
+        ],
+        byteorder=byte_order,
+    )
+
+    return Ifd(
+        offset=offset,
+        entries=tuple(entries),
+        next_ifd_offset=next_ifd_offset,
     )

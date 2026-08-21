@@ -93,3 +93,109 @@ class TestTiffParser(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestIfdParser(unittest.TestCase):
+
+    def test_parses_ifd_entry(self):
+
+        data = (
+            b"II"
+            b"\x2A\x00"
+            b"\x08\x00\x00\x00"
+
+            b"\x01\x00"
+
+            b"\x0F\x01"
+            b"\x02\x00"
+            b"\x08\x00\x00\x00"
+            b"\x1A\x00\x00\x00"
+
+            b"\x00\x00\x00\x00"
+
+            b"Samsung\x00"
+        )
+
+        from photometa.parsers.tiff import (
+            parse_ifd,
+            parse_tiff_header,
+        )
+
+        header = parse_tiff_header(data)
+
+        ifd = parse_ifd(
+            data,
+            header.first_ifd_offset,
+            header.byte_order,
+        )
+
+        self.assertEqual(
+            ifd.offset,
+            8,
+        )
+
+        self.assertEqual(
+            len(ifd.entries),
+            1,
+        )
+
+        entry = ifd.entries[0]
+
+        self.assertEqual(
+            entry.tag,
+            0x010F,
+        )
+
+        self.assertEqual(
+            entry.tag_hex,
+            "0x010F",
+        )
+
+        self.assertEqual(
+            entry.field_type,
+            2,
+        )
+
+        self.assertEqual(
+            entry.count,
+            8,
+        )
+
+        self.assertEqual(
+            entry.value_or_offset,
+            b"\x1A\x00\x00\x00",
+        )
+
+        self.assertEqual(
+            ifd.next_ifd_offset,
+            0,
+        )
+
+    def test_rejects_truncated_ifd(self):
+
+        data = (
+            b"II"
+            b"\x2A\x00"
+            b"\x08\x00\x00\x00"
+
+            b"\x02\x00"
+
+            b"\x0F\x01"
+        )
+
+        from photometa.parsers.tiff import (
+            TiffParserError,
+            parse_ifd,
+            parse_tiff_header,
+        )
+
+        header = parse_tiff_header(data)
+
+        with self.assertRaises(
+            TiffParserError
+        ):
+            parse_ifd(
+                data,
+                header.first_ifd_offset,
+                header.byte_order,
+            )
