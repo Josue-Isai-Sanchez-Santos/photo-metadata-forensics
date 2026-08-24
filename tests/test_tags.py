@@ -3,6 +3,7 @@ import unittest
 from photometa.parsers.tags import (
     get_exif_tag_name,
     get_tiff_tag_name,
+    get_gps_tag_name,
 )
 
 
@@ -66,7 +67,35 @@ class TestExifIfdTags(unittest.TestCase):
             get_exif_tag_name(0xDEAD),
             "UnknownExifTag_DEAD",
         )
+class TestGpsIfdTags(unittest.TestCase):
 
+    def test_gps_latitude_tag(self):
+
+        self.assertEqual(
+            get_gps_tag_name(0x0002),
+            "GPSLatitude",
+        )
+
+    def test_gps_longitude_tag(self):
+
+        self.assertEqual(
+            get_gps_tag_name(0x0004),
+            "GPSLongitude",
+        )
+
+    def test_gps_date_stamp_tag(self):
+
+        self.assertEqual(
+            get_gps_tag_name(0x001D),
+            "GPSDateStamp",
+        )
+
+    def test_unknown_gps_tag(self):
+
+        self.assertEqual(
+            get_gps_tag_name(0xDEAD),
+            "UnknownGpsTag_DEAD",
+        )
 
 if __name__ == "__main__":
     unittest.main()

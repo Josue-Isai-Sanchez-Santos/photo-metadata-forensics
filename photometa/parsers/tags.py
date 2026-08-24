@@ -99,6 +99,32 @@ EXIF_IFD_TAG_NAMES: dict[int, str] = {
     0xA435: "LensSerialNumber",
 }
 
+GPS_IFD_TAG_NAMES: dict[int, str] = {
+    0x0000: "GPSVersionID",
+    0x0001: "GPSLatitudeRef",
+    0x0002: "GPSLatitude",
+    0x0003: "GPSLongitudeRef",
+    0x0004: "GPSLongitude",
+    0x0005: "GPSAltitudeRef",
+    0x0006: "GPSAltitude",
+    0x0007: "GPSTimeStamp",
+    0x0008: "GPSSatellites",
+    0x0009: "GPSStatus",
+    0x000A: "GPSMeasureMode",
+    0x000B: "GPSDOP",
+    0x000C: "GPSSpeedRef",
+    0x000D: "GPSSpeed",
+    0x000E: "GPSTrackRef",
+    0x000F: "GPSTrack",
+    0x0010: "GPSImgDirectionRef",
+    0x0011: "GPSImgDirection",
+    0x0012: "GPSMapDatum",
+    0x001B: "GPSProcessingMethod",
+    0x001C: "GPSAreaInformation",
+    0x001D: "GPSDateStamp",
+    0x001E: "GPSDifferential",
+    0x001F: "GPSHPositioningError",
+}
 
 def get_tiff_tag_name(
     tag: int,
@@ -115,4 +141,12 @@ def get_exif_tag_name(
     return EXIF_IFD_TAG_NAMES.get(
         tag,
         f"UnknownExifTag_{tag:04X}",
+    )
+
+def get_gps_tag_name(
+    tag: int,
+) -> str:
+    return GPS_IFD_TAG_NAMES.get(
+        tag,
+        f"UnknownGpsTag_{tag:04X}",
     )
