@@ -420,14 +420,28 @@ def _altitude_details(
         return (
             abs(value),
             0,
-            "above sea level",
+            "positive ellipsoidal height",
         )
 
     if ref == 1:
         return (
             -abs(value),
             1,
-            "below sea level",
+            "negative ellipsoidal height",
+        )
+
+    if ref == 2:
+        return (
+            abs(value),
+            2,
+            "positive sea-level altitude",
+        )
+
+    if ref == 3:
+        return (
+            -abs(value),
+            3,
+            "negative sea-level altitude",
         )
 
     if ref is None:

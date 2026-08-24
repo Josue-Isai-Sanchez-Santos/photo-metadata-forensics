@@ -49,35 +49,10 @@ def format_location_report(
             f"{summary.altitude:g} m"
         )
 
-        if summary.altitude_ref == 0:
+        if summary.altitude_reference is not None:
             altitude_text += (
                 " "
-                "(EXIF reports above sea level)"
-            )
-
-        elif summary.altitude_ref == 1:
-            altitude_text += (
-                " "
-                "(EXIF reports below sea level)"
-            )
-
-        elif (
-            summary.altitude_reference
-            == "reference not provided"
-        ):
-            altitude_text += (
-                " "
-                "(EXIF altitude reference "
-                "not provided)"
-            )
-
-        elif (
-            summary.altitude_reference
-            is not None
-        ):
-            altitude_text += (
-                " "
-                f"(EXIF altitude reference: "
+                f"(EXIF: "
                 f"{summary.altitude_reference})"
             )
 

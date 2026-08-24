@@ -55,7 +55,7 @@ class TestGpsPresentation(
 
         self.assertIn(
             "Altitude:       2240 m "
-            "(EXIF reports above sea level)",
+            "(EXIF: positive ellipsoidal height)",
             report,
         )
 
@@ -140,7 +140,7 @@ class TestGpsPresentation(
 
         self.assertEqual(
             summary.altitude_reference,
-            "below sea level",
+            "negative ellipsoidal height",
         )
 
         report = format_location_report(
@@ -149,7 +149,7 @@ class TestGpsPresentation(
 
         self.assertIn(
             "Altitude:       -7.812 m "
-            "(EXIF reports below sea level)",
+            "(EXIF: negative ellipsoidal height)",
             report,
         )
 
