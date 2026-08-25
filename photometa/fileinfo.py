@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import hashlib
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from photometa.hashing import (
+    calculate_sha256,
+)
 from photometa.parsers.jpeg import (
     JpegParserError,
     iter_jpeg_segments,
@@ -241,35 +243,6 @@ def get_jpeg_dimensions(
         "No se encontró un segmento SOF "
         "con las dimensiones JPEG."
     )
-
-
-def calculate_sha256(
-    path: str | Path,
-) -> str:
-    """
-    Calcula SHA-256 del contenido completo.
-    """
-
-    file_path = Path(path)
-
-    digest = hashlib.sha256()
-
-    with file_path.open("rb") as file:
-
-        while True:
-
-            chunk = file.read(
-                1024 * 1024
-            )
-
-            if not chunk:
-                break
-
-            digest.update(
-                chunk
-            )
-
-    return digest.hexdigest()
 
 
 def format_file_size(
