@@ -91,6 +91,9 @@ EXIF_IFD_TAG_NAMES: dict[int, str] = {
     0xA408: "Contrast",
     0xA409: "Saturation",
     0xA40A: "Sharpness",
+    0xA420: "ImageUniqueID",
+    0xA430: "CameraOwnerName",
+    0xA431: "BodySerialNumber",
 
     # Lente.
     0xA432: "LensSpecification",

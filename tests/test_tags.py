@@ -61,6 +61,33 @@ class TestExifIfdTags(unittest.TestCase):
             "LensModel",
         )
 
+    def test_image_unique_id_tag(self):
+
+        self.assertEqual(
+            get_exif_tag_name(
+                0xA420
+            ),
+            "ImageUniqueID",
+        )
+
+    def test_camera_owner_name_tag(self):
+
+        self.assertEqual(
+            get_exif_tag_name(
+                0xA430
+            ),
+            "CameraOwnerName",
+        )
+
+    def test_body_serial_number_tag(self):
+
+        self.assertEqual(
+            get_exif_tag_name(
+                0xA431
+            ),
+            "BodySerialNumber",
+        )
+
     def test_unknown_exif_tag(self):
 
         self.assertEqual(
