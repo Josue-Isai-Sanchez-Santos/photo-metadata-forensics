@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "photo-metadata-forensics"
+version = "0.1.0"
+description = "Image metadata, privacy and forensic analysis toolkit."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+photometa = "photometa.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["photometa*"]

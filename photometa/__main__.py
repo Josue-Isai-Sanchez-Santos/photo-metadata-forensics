@@ -10,6 +10,10 @@ from photometa.hashing import (
     calculate_hash,
     calculate_hashes,
 )
+from photometa.sanitization.scrub import (
+    ScrubError,
+    scrub_jpeg,
+)
 
 
 ALGORITHM_LABELS = {
@@ -75,6 +79,33 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    scrub_parser = commands.add_parser(
+        "scrub",
+        help=(
+            "Create a privacy-sanitized "
+            "JPEG copy."
+        ),
+    )
+
+    scrub_parser.add_argument(
+        "path",
+        type=Path,
+        help=(
+            "JPEG file to sanitize."
+        ),
+    )
+
+    scrub_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help=(
+            "Output file. "
+            "Default: <name>_clean.jpg"
+        ),
+    )
+
     return parser
 
 
@@ -91,6 +122,7 @@ def main(
     if args.command == "hash":
 
         try:
+
             return run_hash_command(
                 path=args.path,
                 algorithm=args.algorithm,
@@ -98,6 +130,24 @@ def main(
             )
 
         except HashingError as exc:
+
+            print(
+                f"error: {exc}",
+                file=sys.stderr,
+            )
+
+            return 1
+
+    if args.command == "scrub":
+
+        try:
+
+            return run_scrub_command(
+                path=args.path,
+                output=args.output,
+            )
+
+        except ScrubError as exc:
 
             print(
                 f"error: {exc}",
@@ -160,7 +210,117 @@ def run_hash_command(
     return 0
 
 
+def run_scrub_command(
+    path: Path,
+    output: Path | None = None,
+) -> int:
+
+    report = scrub_jpeg(
+        path,
+        output,
+    )
+
+    print("SCRUB")
+    print("-" * 60)
+
+    print(
+        f"Original:   "
+        f"{report.input_path}"
+    )
+
+    print(
+        f"Sanitized:  "
+        f"{report.output_path}"
+    )
+
+    print()
+
+    print("Original:")
+    print(
+        "GPS:",
+        _yes_no(
+            report.original_gps
+        ),
+    )
+
+    print()
+
+    print("Sanitized:")
+    print(
+        "GPS:",
+        _yes_no(
+            report.sanitized_gps
+        ),
+    )
+
+    print()
+
+    print(
+        "JPEG structure valid:",
+        "YES",
+    )
+
+    print(
+        "Dimensions preserved:",
+        _yes_no(
+            report.dimensions_preserved
+        ),
+    )
+
+    print(
+        "Image data preserved:",
+        _yes_no(
+            report.image_data_preserved
+        ),
+    )
+
+    print(
+        "Original unchanged:",
+        _yes_no(
+            report.original_unchanged
+        ),
+    )
+
+    print()
+
+    print(
+        "Removed segments:",
+        len(
+            report.removed_segments
+        ),
+    )
+
+    print(
+        "Removed bytes:",
+        report.removed_bytes,
+    )
+
+    if (
+        report.trailing_bytes_removed
+        > 0
+    ):
+
+        print(
+            "Trailing bytes removed:",
+            report.trailing_bytes_removed,
+        )
+
+    return 0
+
+
+def _yes_no(
+    value: bool,
+) -> str:
+
+    return (
+        "YES"
+        if value
+        else "NO"
+    )
+
+
 if __name__ == "__main__":
+
     raise SystemExit(
         main()
     )
