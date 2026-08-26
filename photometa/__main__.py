@@ -14,6 +14,15 @@ from photometa.sanitization.scrub import (
     ScrubError,
     scrub_jpeg,
 )
+from photometa.sanitization.selective import (
+    SCRUB_MODE_GPS,
+    SCRUB_MODE_PRIVACY,
+    SelectiveScrubReport,
+    scrub_jpeg_selective,
+)
+
+
+SCRUB_MODE_ALL = "all"
 
 
 ALGORITHM_LABELS = {
@@ -82,8 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
     scrub_parser = commands.add_parser(
         "scrub",
         help=(
-            "Create a privacy-sanitized "
-            "JPEG copy."
+            "Create a sanitized JPEG copy."
         ),
     )
 
@@ -104,6 +112,49 @@ def build_parser() -> argparse.ArgumentParser:
             "Output file. "
             "Default: <name>_clean.jpg"
         ),
+    )
+
+    scrub_modes = (
+        scrub_parser
+        .add_mutually_exclusive_group()
+    )
+
+    scrub_modes.add_argument(
+        "--all",
+        dest="scrub_mode",
+        action="store_const",
+        const=SCRUB_MODE_ALL,
+        help=(
+            "Remove all removable metadata. "
+            "This is the default."
+        ),
+    )
+
+    scrub_modes.add_argument(
+        "--gps",
+        dest="scrub_mode",
+        action="store_const",
+        const=SCRUB_MODE_GPS,
+        help=(
+            "Remove GPS metadata while "
+            "preserving other metadata."
+        ),
+    )
+
+    scrub_modes.add_argument(
+        "--privacy",
+        dest="scrub_mode",
+        action="store_const",
+        const=SCRUB_MODE_PRIVACY,
+        help=(
+            "Remove supported privacy-sensitive "
+            "metadata while preserving "
+            "non-sensitive metadata."
+        ),
+    )
+
+    scrub_parser.set_defaults(
+        scrub_mode=SCRUB_MODE_ALL
     )
 
     return parser
@@ -145,6 +196,7 @@ def main(
             return run_scrub_command(
                 path=args.path,
                 output=args.output,
+                mode=args.scrub_mode,
             )
 
         except ScrubError as exc:
@@ -169,6 +221,7 @@ def run_hash_command(
 
     print("HASH")
     print("-" * 60)
+
     print(
         f"File:       {path}"
     )
@@ -213,15 +266,42 @@ def run_hash_command(
 def run_scrub_command(
     path: Path,
     output: Path | None = None,
+    mode: str = SCRUB_MODE_ALL,
 ) -> int:
 
-    report = scrub_jpeg(
+    if mode == SCRUB_MODE_ALL:
+
+        report = scrub_jpeg(
+            path,
+            output,
+        )
+
+        _print_all_scrub_report(
+            report
+        )
+
+        return 0
+
+    report = scrub_jpeg_selective(
         path,
         output,
+        mode=mode,
     )
+
+    _print_selective_scrub_report(
+        report
+    )
+
+    return 0
+
+
+def _print_all_scrub_report(
+    report: object,
+) -> None:
 
     print("SCRUB")
     print("-" * 60)
+    print("Mode:       ALL")
 
     print(
         f"Original:   "
@@ -305,7 +385,115 @@ def run_scrub_command(
             report.trailing_bytes_removed,
         )
 
-    return 0
+
+def _print_selective_scrub_report(
+    report: SelectiveScrubReport,
+) -> None:
+
+    print("SCRUB")
+    print("-" * 60)
+
+    print(
+        "Mode:      ",
+        report.mode.upper(),
+    )
+
+    print(
+        f"Original:   "
+        f"{report.input_path}"
+    )
+
+    print(
+        f"Sanitized:  "
+        f"{report.output_path}"
+    )
+
+    print()
+
+    print("Original:")
+
+    print(
+        "GPS:",
+        _yes_no(
+            report.original_gps
+        ),
+    )
+
+    print(
+        "Privacy findings:",
+        report.privacy_findings_before,
+    )
+
+    print()
+
+    print("Sanitized:")
+
+    print(
+        "GPS:",
+        _yes_no(
+            report.sanitized_gps
+        ),
+    )
+
+    print(
+        "Privacy findings:",
+        report.privacy_findings_after,
+    )
+
+    print()
+
+    print(
+        "JPEG structure valid:",
+        "YES",
+    )
+
+    print(
+        "Dimensions preserved:",
+        _yes_no(
+            report.dimensions_preserved
+        ),
+    )
+
+    print(
+        "Image data preserved:",
+        _yes_no(
+            report.image_data_preserved
+        ),
+    )
+
+    print(
+        "Original unchanged:",
+        _yes_no(
+            report.original_unchanged
+        ),
+    )
+
+    print()
+
+    print(
+        "Removed segments:",
+        report.removed_segment_count,
+    )
+
+    print(
+        "Modified segments:",
+        report.modified_segment_count,
+    )
+
+    print(
+        "File bytes removed:",
+        report.removed_bytes,
+    )
+
+    if (
+        report.trailing_bytes_removed
+        > 0
+    ):
+
+        print(
+            "Trailing bytes removed:",
+            report.trailing_bytes_removed,
+        )
 
 
 def _yes_no(

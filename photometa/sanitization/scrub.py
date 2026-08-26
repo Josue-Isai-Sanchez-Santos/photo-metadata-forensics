@@ -6,6 +6,12 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from photometa.sanitization.jpeg_rewriter import (
+    JpegRewriteError,
+    SegmentTransform,
+    rewrite_jpeg_bytes,
+)
+
 from photometa.extractors.gps_ifd import (
     GpsIfdExtractorError,
     extract_gps_ifd_from_jpeg,
@@ -474,309 +480,11 @@ def scrub_jpeg(
 def _rewrite_jpeg_bytes(
     data: bytes,
 ) -> _RewriteResult:
-    """
-    Rewrites a complete JPEG while removing
-    privacy-bearing metadata segments.
 
-    The function understands entropy-coded
-    scan regions well enough to preserve:
-
-        FF00 byte stuffing
-        RST0-RST7
-        multiple SOS scans
-        metadata between scans
-        EOI
-
-    It does not decode or re-encode pixels.
-    """
-
-    if (
-        len(data) < 4
-        or data[0:2]
-        != b"\xFF\xD8"
-    ):
-
-        raise ScrubError(
-            "File does not begin with "
-            "JPEG SOI FF D8."
-        )
-
-    output = bytearray(
-        data[0:2]
-    )
-
-    removed: list[
-        RemovedSegment
-    ] = []
-
-    scan_hasher = hashlib.sha256()
-
-    position = 2
-
-    in_scan = False
-    resume_scan = False
-
-    saw_sos = False
-    saw_eoi = False
-
-    while position < len(data):
-
-        if in_scan:
-
-            marker_start = data.find(
-                b"\xFF",
-                position,
-            )
-
-            if marker_start == -1:
-
-                raise ScrubError(
-                    "JPEG scan data ended "
-                    "without a marker."
-                )
-
-            scan_data = data[
-                position:
-                marker_start
-            ]
-
-            output += scan_data
-
-            scan_hasher.update(
-                scan_data
-            )
-
-            code_position = (
-                marker_start
-            )
-
-            while (
-                code_position
-                < len(data)
-                and data[
-                    code_position
-                ] == 0xFF
-            ):
-
-                code_position += 1
-
-            if code_position >= len(data):
-
-                raise ScrubError(
-                    "Truncated marker at "
-                    "end of JPEG scan."
-                )
-
-            marker = data[
-                code_position
-            ]
-
-            #
-            # FF00 = stuffed literal FF
-            # inside entropy-coded data.
-            #
-            if marker == 0x00:
-
-                raw = data[
-                    marker_start:
-                    code_position + 1
-                ]
-
-                output += raw
-
-                scan_hasher.update(
-                    raw
-                )
-
-                position = (
-                    code_position + 1
-                )
-
-                continue
-
-            #
-            # Restart markers and TEM are
-            # part of the scan stream and
-            # are preserved unchanged.
-            #
-            if (
-                marker == 0x01
-                or 0xD0
-                <= marker
-                <= 0xD7
-            ):
-
-                raw = data[
-                    marker_start:
-                    code_position + 1
-                ]
-
-                output += raw
-
-                scan_hasher.update(
-                    raw
-                )
-
-                position = (
-                    code_position + 1
-                )
-
-                continue
-
-            #
-            # We reached a real marker that
-            # terminates or interrupts the
-            # entropy-coded region.
-            #
-            in_scan = False
-
-            resume_scan = (
-                marker == 0xDC
-            )
-
-            position = (
-                marker_start
-            )
-
-            continue
-
-        marker_start = (
-            position
-        )
-
-        if (
-            data[position]
-            != 0xFF
-        ):
-
-            raise ScrubError(
-                (
-                    "Expected JPEG marker "
-                    f"at offset 0x"
-                    f"{position:08X}."
-                )
-            )
-
-        code_position = (
-            position
-        )
-
-        while (
-            code_position
-            < len(data)
-            and data[
-                code_position
-            ] == 0xFF
-        ):
-
-            code_position += 1
-
-        if (
-            code_position
-            >= len(data)
-        ):
-
-            raise ScrubError(
-                "Truncated JPEG marker."
-            )
-
-        marker = data[
-            code_position
-        ]
-
-        if marker == 0x00:
-
-            raise ScrubError(
-                (
-                    "Found FF00 outside "
-                    "entropy-coded data at "
-                    f"offset 0x"
-                    f"{marker_start:08X}."
-                )
-            )
-
-        marker_end = (
-            code_position + 1
-        )
-
-        if (
-            marker
-            in STANDALONE_MARKERS
-        ):
-
-            raw = data[
-                marker_start:
-                marker_end
-            ]
-
-            output += raw
-
-            position = (
-                marker_end
-            )
-
-            if marker == 0xD9:
-
-                saw_eoi = True
-                break
-
-            continue
-
-        if (
-            code_position + 3
-            > len(data)
-        ):
-
-            raise ScrubError(
-                "Truncated JPEG segment "
-                "length."
-            )
-
-        declared_length = (
-            int.from_bytes(
-                data[
-                    code_position + 1:
-                    code_position + 3
-                ],
-                byteorder="big",
-            )
-        )
-
-        if declared_length < 2:
-
-            raise ScrubError(
-                (
-                    "Invalid JPEG segment "
-                    f"length "
-                    f"{declared_length}."
-                )
-            )
-
-        segment_end = (
-            code_position
-            + 1
-            + declared_length
-        )
-
-        if segment_end > len(data):
-
-            raise ScrubError(
-                (
-                    "JPEG segment at offset "
-                    f"0x{marker_start:08X} "
-                    "is truncated."
-                )
-            )
-
-        payload = data[
-            code_position + 3:
-            segment_end
-        ]
-
-        raw_segment = data[
-            marker_start:
-            segment_end
-        ]
+    def transformer(
+        marker: int,
+        payload: bytes,
+    ) -> SegmentTransform:
 
         reason = (
             _metadata_removal_reason(
@@ -787,83 +495,59 @@ def _rewrite_jpeg_bytes(
 
         if reason is None:
 
-            output += (
-                raw_segment
-            )
-
-        else:
-
-            removed.append(
-                RemovedSegment(
-                    marker=marker,
-                    marker_name=(
-                        _marker_name(
-                            marker
-                        )
-                    ),
-                    offset=(
-                        marker_start
-                    ),
-                    size=len(
-                        raw_segment
-                    ),
-                    reason=reason,
+            return (
+                SegmentTransform
+                .preserve(
+                    payload
                 )
             )
 
-        position = (
-            segment_end
+        return (
+            SegmentTransform.remove(
+                reason
+            )
         )
 
-        if marker == 0xDA:
+    try:
 
-            saw_sos = True
-            in_scan = True
-            resume_scan = False
+        result = rewrite_jpeg_bytes(
+            data,
+            transformer,
+            strip_trailing=True,
+        )
 
-        elif (
-            resume_scan
-            and marker == 0xDC
-        ):
-
-            in_scan = True
-            resume_scan = False
-
-        else:
-
-            resume_scan = False
-
-    if not saw_sos:
+    except JpegRewriteError as exc:
 
         raise ScrubError(
-            "JPEG does not contain "
-            "a Start Of Scan marker."
+            str(exc)
+        ) from exc
+
+    removed = tuple(
+        RemovedSegment(
+            marker=change.marker,
+            marker_name=(
+                change.marker_name
+            ),
+            offset=change.offset,
+            size=(
+                change.original_size
+            ),
+            reason=change.reason,
         )
-
-    if not saw_eoi:
-
-        raise ScrubError(
-            "JPEG does not contain "
-            "an End Of Image marker."
-        )
-
-    trailing_bytes_removed = (
-        len(data)
-        - position
+        for change
+        in result.changes
+        if change.action
+        == "removed"
     )
 
     return _RewriteResult(
-        data=bytes(
-            output
-        ),
-        removed_segments=tuple(
-            removed
-        ),
+        data=result.data,
+        removed_segments=removed,
         trailing_bytes_removed=(
-            trailing_bytes_removed
+            result.trailing_bytes_removed
         ),
         scan_data_sha256=(
-            scan_hasher.hexdigest()
+            result.scan_data_sha256
         ),
     )
 
