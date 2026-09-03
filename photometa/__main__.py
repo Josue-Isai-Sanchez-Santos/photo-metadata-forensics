@@ -5,6 +5,14 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from photometa.analysis.anomalies import (
+    AnomalyAnalysisError,
+    analyze_anomalies,
+)
+from photometa.presentation.anomalies import (
+    format_anomaly_report,
+)
+
 from photometa.analysis.comparison import (
     ComparisonError,
     compare_images,
@@ -96,6 +104,25 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+
+
+    anomalies_parser = (
+        commands.add_parser(
+            "anomalies",
+            help=(
+                "Analyze metadata and JPEG "
+                "structure for anomalies."
+            ),
+        )
+    )
+
+    anomalies_parser.add_argument(
+        "path",
+        type=Path,
+        help=(
+            "JPEG file to analyze."
+        ),
+    )
 
     compare_parser = commands.add_parser(
         "compare",
@@ -215,6 +242,31 @@ def main(
             )
 
         except HashingError as exc:
+
+            print(
+                f"error: {exc}",
+                file=sys.stderr,
+            )
+
+            return 1
+
+    if args.command == "anomalies":
+
+        try:
+
+            report = analyze_anomalies(
+                args.path
+            )
+
+            print(
+                format_anomaly_report(
+                    report
+                )
+            )
+
+            return 0
+
+        except AnomalyAnalysisError as exc:
 
             print(
                 f"error: {exc}",
