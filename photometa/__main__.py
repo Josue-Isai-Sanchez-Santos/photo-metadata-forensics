@@ -5,6 +5,14 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from photometa.analysis.comparison import (
+    ComparisonError,
+    compare_images,
+)
+from photometa.presentation.comparison import (
+    format_comparison_report,
+)
+
 from photometa.hashing import (
     HashingError,
     calculate_hash,
@@ -85,6 +93,32 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Calculate SHA-256, SHA-1 "
             "and MD5."
+        ),
+    )
+
+
+    compare_parser = commands.add_parser(
+        "compare",
+        help=(
+            "Compare metadata and JPEG "
+            "characteristics between "
+            "two images."
+        ),
+    )
+
+    compare_parser.add_argument(
+        "original",
+        type=Path,
+        help=(
+            "Original/reference JPEG."
+        ),
+    )
+
+    compare_parser.add_argument(
+        "copy",
+        type=Path,
+        help=(
+            "Copy/derived JPEG to compare."
         ),
     )
 
@@ -181,6 +215,32 @@ def main(
             )
 
         except HashingError as exc:
+
+            print(
+                f"error: {exc}",
+                file=sys.stderr,
+            )
+
+            return 1
+
+    if args.command == "compare":
+
+        try:
+
+            report = compare_images(
+                args.original,
+                args.copy,
+            )
+
+            print(
+                format_comparison_report(
+                    report
+                )
+            )
+
+            return 0
+
+        except ComparisonError as exc:
 
             print(
                 f"error: {exc}",
