@@ -18,11 +18,59 @@ from photometa.presentation.anomalies import (
 )
 
 from photometa.analysis.comparison import (
+    PRESENCE_NO,
+    PRESENCE_UNKNOWN,
     ComparisonError,
     compare_images,
+    inspect_image_for_comparison,
 )
 from photometa.presentation.comparison import (
     format_comparison_report,
+)
+
+from photometa.analysis.privacy import (
+    analyze_privacy,
+)
+from photometa.analysis.privacy_score import (
+    calculate_privacy_exposure_score,
+)
+from photometa.analysis.report import (
+    FullReportError,
+    build_full_report,
+)
+from photometa.extractors.gps_ifd import (
+    GpsIfdExtractorError,
+    build_location_summary,
+    extract_gps_ifd_from_jpeg,
+)
+from photometa.parsers.iptc import (
+    IptcParserError,
+)
+from photometa.parsers.jpeg import (
+    JpegParserError,
+    iter_jpeg_segments,
+)
+from photometa.parsers.xmp import (
+    XmpParserError,
+)
+from photometa.presentation.gps import (
+    format_gps_raw_report,
+    format_location_report,
+)
+from photometa.presentation.privacy import (
+    format_privacy_detailed_report,
+    format_privacy_report,
+)
+from photometa.presentation.privacy_score import (
+    format_privacy_score,
+    format_privacy_score_detailed,
+)
+from photometa.presentation.report import (
+    format_full_report,
+)
+from photometa.presentation.scan import (
+    format_scan_report,
+    format_segment_report,
 )
 
 from photometa.hashing import (
@@ -91,6 +139,104 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands = parser.add_subparsers(
         dest="command",
+    )
+
+    scan_parser = commands.add_parser(
+        "scan",
+        help=(
+            "Scan a JPEG and summarize "
+            "metadata groups and structure."
+        ),
+    )
+
+    scan_parser.add_argument(
+        "path",
+        type=Path,
+        help="JPEG file to scan.",
+    )
+
+    scan_parser.add_argument(
+        "--segments",
+        action="store_true",
+        help=(
+            "Also display JPEG header "
+            "segments before the first SOS."
+        ),
+    )
+
+    privacy_parser = commands.add_parser(
+        "privacy",
+        help=(
+            "Analyze privacy-sensitive "
+            "metadata and exposure score."
+        ),
+    )
+
+    privacy_parser.add_argument(
+        "path",
+        type=Path,
+        help=(
+            "JPEG file to analyze."
+        ),
+    )
+
+    privacy_parser.add_argument(
+        "--detailed",
+        action="store_true",
+        help=(
+            "Show finding sources, fields "
+            "and score contributions."
+        ),
+    )
+
+    gps_parser = commands.add_parser(
+        "gps",
+        help=(
+            "Extract and display GPS "
+            "metadata."
+        ),
+    )
+
+    gps_parser.add_argument(
+        "path",
+        type=Path,
+        help=(
+            "JPEG file to inspect."
+        ),
+    )
+
+    gps_parser.add_argument(
+        "--raw",
+        action="store_true",
+        help=(
+            "Also display raw forensic "
+            "GPS IFD values."
+        ),
+    )
+
+    report_parser = commands.add_parser(
+        "report",
+        help=(
+            "Generate a comprehensive "
+            "metadata and forensic report."
+        ),
+    )
+
+    report_parser.add_argument(
+        "path",
+        type=Path,
+        help=(
+            "JPEG file to report."
+        ),
+    )
+
+    report_parser.add_argument(
+        "--include-sensitive",
+        action="store_true",
+        help=(
+            "Include exact GPS coordinates "
+            "when available."
+        ),
     )
 
     hash_parser = commands.add_parser(
@@ -262,6 +408,96 @@ def main(
         argv
     )
 
+    if args.command == "scan":
+
+        try:
+
+            return run_scan_command(
+                path=args.path,
+                show_segments=(
+                    args.segments
+                ),
+            )
+
+        except (
+            ComparisonError,
+            JpegParserError,
+            OSError,
+        ) as exc:
+
+            print(
+                f"error: {exc}",
+                file=sys.stderr,
+            )
+
+            return 1
+
+    if args.command == "privacy":
+
+        try:
+
+            return run_privacy_command(
+                path=args.path,
+                detailed=(
+                    args.detailed
+                ),
+            )
+
+        except (
+            JpegParserError,
+            XmpParserError,
+            IptcParserError,
+            OSError,
+        ) as exc:
+
+            print(
+                f"error: {exc}",
+                file=sys.stderr,
+            )
+
+            return 1
+
+    if args.command == "gps":
+
+        try:
+
+            return run_gps_command(
+                path=args.path,
+                raw=args.raw,
+            )
+
+        except (
+            ComparisonError,
+            GpsIfdExtractorError,
+        ) as exc:
+
+            print(
+                f"error: {exc}",
+                file=sys.stderr,
+            )
+
+            return 1
+
+    if args.command == "report":
+
+        try:
+
+            return run_report_command(
+                path=args.path,
+                include_sensitive=(
+                    args.include_sensitive
+                ),
+            )
+
+        except FullReportError as exc:
+
+            print(
+                f"error: {exc}",
+                file=sys.stderr,
+            )
+
+            return 1
+
     if args.command == "hash":
 
         try:
@@ -352,6 +588,182 @@ def main(
             return 1
 
     parser.print_help()
+
+    return 0
+
+
+def run_scan_command(
+    path: Path,
+    show_segments: bool = False,
+) -> int:
+
+    snapshot = (
+        inspect_image_for_comparison(
+            path
+        )
+    )
+
+    print(
+        format_scan_report(
+            snapshot
+        )
+    )
+
+    if show_segments:
+
+        segments = tuple(
+            iter_jpeg_segments(
+                path
+            )
+        )
+
+        print()
+
+        print(
+            format_segment_report(
+                segments
+            )
+        )
+
+    return 0
+
+
+def run_privacy_command(
+    path: Path,
+    detailed: bool = False,
+) -> int:
+
+    report = analyze_privacy(
+        path
+    )
+
+    score = (
+        calculate_privacy_exposure_score(
+            report
+        )
+    )
+
+    if detailed:
+
+        privacy_text = (
+            format_privacy_detailed_report(
+                report
+            )
+        )
+
+        score_text = (
+            format_privacy_score_detailed(
+                score
+            )
+        )
+
+    else:
+
+        privacy_text = (
+            format_privacy_report(
+                report
+            )
+        )
+
+        score_text = (
+            format_privacy_score(
+                score
+            )
+        )
+
+    print(
+        privacy_text
+    )
+
+    print()
+
+    print(
+        score_text
+    )
+
+    return 0
+
+
+def run_gps_command(
+    path: Path,
+    raw: bool = False,
+) -> int:
+
+    snapshot = (
+        inspect_image_for_comparison(
+            path
+        )
+    )
+
+    if snapshot.gps == PRESENCE_NO:
+
+        print("LOCATION")
+        print("-" * 45)
+        print("GPS detected: NO")
+
+        return 0
+
+    if (
+        snapshot.gps
+        == PRESENCE_UNKNOWN
+    ):
+
+        raise GpsIfdExtractorError(
+            (
+                "GPS status could not be "
+                "determined because EXIF "
+                "could not be fully parsed."
+            )
+        )
+
+    metadata = (
+        extract_gps_ifd_from_jpeg(
+            path
+        )
+    )
+
+    summary = (
+        build_location_summary(
+            metadata
+        )
+    )
+
+    print(
+        format_location_report(
+            summary
+        )
+    )
+
+    if raw:
+
+        print()
+
+        print(
+            format_gps_raw_report(
+                metadata
+            )
+        )
+
+    return 0
+
+
+def run_report_command(
+    path: Path,
+    include_sensitive: bool = False,
+) -> int:
+
+    report = build_full_report(
+        path
+    )
+
+    print(
+        format_full_report(
+            report,
+            include_sensitive=(
+                include_sensitive
+            ),
+        )
+    )
 
     return 0
 
