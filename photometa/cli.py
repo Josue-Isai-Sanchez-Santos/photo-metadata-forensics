@@ -17,6 +17,15 @@ from photometa.presentation.anomalies import (
     format_anomaly_report,
 )
 
+from photometa.analysis.batch import (
+    BatchAnalysisError,
+    analyze_directory,
+)
+from photometa.presentation.batch import (
+    format_batch_privacy_report,
+    format_batch_scan_report,
+)
+
 from photometa.analysis.comparison import (
     PRESENCE_NO,
     PRESENCE_UNKNOWN,
@@ -164,6 +173,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    scan_parser.add_argument(
+        "-r",
+        "--recursive",
+        action="store_true",
+        help=(
+            "Recursively scan files when "
+            "PATH is a directory."
+        ),
+    )
+
     privacy_parser = commands.add_parser(
         "privacy",
         help=(
@@ -186,6 +205,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Show finding sources, fields "
             "and score contributions."
+        ),
+    )
+
+    privacy_parser.add_argument(
+        "-r",
+        "--recursive",
+        action="store_true",
+        help=(
+            "Recursively analyze files when "
+            "PATH is a directory."
         ),
     )
 
@@ -417,9 +446,13 @@ def main(
                 show_segments=(
                     args.segments
                 ),
+                recursive=(
+                    args.recursive
+                ),
             )
 
         except (
+            BatchAnalysisError,
             ComparisonError,
             JpegParserError,
             OSError,
@@ -441,9 +474,13 @@ def main(
                 detailed=(
                     args.detailed
                 ),
+                recursive=(
+                    args.recursive
+                ),
             )
 
         except (
+            BatchAnalysisError,
             JpegParserError,
             XmpParserError,
             IptcParserError,
@@ -595,7 +632,33 @@ def main(
 def run_scan_command(
     path: Path,
     show_segments: bool = False,
+    recursive: bool = False,
 ) -> int:
+
+    if path.is_dir():
+
+        if show_segments:
+
+            raise BatchAnalysisError(
+                (
+                    "--segments is only "
+                    "available when scanning "
+                    "a single JPEG file."
+                )
+            )
+
+        report = analyze_directory(
+            path,
+            recursive=recursive,
+        )
+
+        print(
+            format_batch_scan_report(
+                report
+            )
+        )
+
+        return 0
 
     snapshot = (
         inspect_image_for_comparison(
@@ -631,7 +694,24 @@ def run_scan_command(
 def run_privacy_command(
     path: Path,
     detailed: bool = False,
+    recursive: bool = False,
 ) -> int:
+
+    if path.is_dir():
+
+        report = analyze_directory(
+            path,
+            recursive=recursive,
+        )
+
+        print(
+            format_batch_privacy_report(
+                report,
+                detailed=detailed,
+            )
+        )
+
+        return 0
 
     report = analyze_privacy(
         path
