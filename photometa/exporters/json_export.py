@@ -388,6 +388,12 @@ def build_batch_scan_json_document(
                 "png": (
                     report.png_count
                 ),
+                "webp": (
+                    report.webp_count
+                ),
+                "tiff": (
+                    report.tiff_count
+                ),
                 "unsupported": (
                     report.unsupported_count
                 ),

@@ -40,7 +40,17 @@ def format_batch_scan_report(
         (
             f"{report.png_count:>5} "
             "PNG "
-            "(recognized, not analyzed)"
+            "(recognized, BASIC single-file scan)"
+        ),
+        (
+            f"{report.webp_count:>5} "
+            "WebP "
+            "(recognized, BASIC single-file scan)"
+        ),
+        (
+            f"{report.tiff_count:>5} "
+            "TIFF "
+            "(recognized, BASIC single-file scan)"
         ),
         (
             f"{report.unsupported_count:>5} "
@@ -138,7 +148,17 @@ def format_batch_privacy_report(
         (
             f"PNG:                    "
             f"{report.png_count} "
-            "(recognized, not analyzed)"
+            "(privacy not analyzed)"
+        ),
+        (
+            f"WebP:                   "
+            f"{report.webp_count} "
+            "(privacy not analyzed)"
+        ),
+        (
+            f"TIFF:                   "
+            f"{report.tiff_count} "
+            "(privacy not analyzed)"
         ),
         (
             f"Unsupported:            "

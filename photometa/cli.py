@@ -99,6 +99,16 @@ from photometa.exporters.html_report import (
     write_html_report,
 )
 
+from photometa.formats.pillow_backend import (
+    FORMAT_JPEG,
+    AdditionalFormatError,
+    detect_scan_format,
+    inspect_additional_image,
+)
+from photometa.presentation.additional_scan import (
+    format_additional_scan_report,
+)
+
 from photometa.hashing import (
     HashingError,
     calculate_hash,
@@ -170,15 +180,15 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser = commands.add_parser(
         "scan",
         help=(
-            "Scan a JPEG and summarize "
-            "metadata groups and structure."
+            "Scan a supported image and summarize "
+            "available metadata and structure."
         ),
     )
 
     scan_parser.add_argument(
         "path",
         type=Path,
-        help=("JPEG file or directory to scan."),
+        help=("Image file or directory to scan."),
     )
 
     scan_parser.add_argument(
@@ -538,6 +548,7 @@ def main(
             )
 
         except (
+            AdditionalFormatError,
             BatchAnalysisError,
             ComparisonError,
             CsvExportError,
@@ -903,6 +914,59 @@ def run_scan_command(
                 "directory input."
             )
         )
+
+    format_name = (
+        detect_scan_format(
+            path
+        )
+    )
+
+    if format_name != FORMAT_JPEG:
+
+        if show_segments:
+
+            raise AdditionalFormatError(
+                (
+                    "--segments is a "
+                    "JPEG-only operation."
+                )
+            )
+
+        if json_output:
+
+            raise AdditionalFormatError(
+                (
+                    "Single-file JSON export "
+                    f"is not yet implemented "
+                    f"for {format_name}. "
+                    "Use the normal scan "
+                    "during Point 27A."
+                )
+            )
+
+        if include_sensitive:
+
+            raise AdditionalFormatError(
+                (
+                    "--include-sensitive "
+                    "is currently available "
+                    "only for JPEG JSON scans."
+                )
+            )
+
+        snapshot = (
+            inspect_additional_image(
+                path
+            )
+        )
+
+        print(
+            format_additional_scan_report(
+                snapshot
+            )
+        )
+
+        return 0
 
     if json_output:
 

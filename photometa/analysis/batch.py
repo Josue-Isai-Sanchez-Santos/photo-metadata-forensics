@@ -31,6 +31,8 @@ from photometa.parsers.xmp import (
 
 FORMAT_JPEG = "JPEG"
 FORMAT_PNG = "PNG"
+FORMAT_WEBP = "WEBP"
+FORMAT_TIFF = "TIFF"
 FORMAT_UNSUPPORTED = "UNSUPPORTED"
 
 
@@ -38,6 +40,14 @@ JPEG_SIGNATURE = b"\xFF\xD8"
 
 PNG_SIGNATURE = (
     b"\x89PNG\r\n\x1a\n"
+)
+
+TIFF_LE_SIGNATURE = (
+    b"II\x2A\x00"
+)
+
+TIFF_BE_SIGNATURE = (
+    b"MM\x00\x2A"
 )
 
 
@@ -129,6 +139,28 @@ class BatchReport:
         return sum(
             item.detected_format
             == FORMAT_PNG
+            for item in self.items
+        )
+
+    @property
+    def webp_count(
+        self,
+    ) -> int:
+
+        return sum(
+            item.detected_format
+            == FORMAT_WEBP
+            for item in self.items
+        )
+
+    @property
+    def tiff_count(
+        self,
+    ) -> int:
+
+        return sum(
+            item.detected_format
+            == FORMAT_TIFF
             for item in self.items
         )
 
@@ -348,6 +380,27 @@ def detect_batch_file_format(
     ):
 
         return FORMAT_PNG
+
+    if (
+        len(signature) >= 12
+        and signature[0:4]
+        == b"RIFF"
+        and signature[8:12]
+        == b"WEBP"
+    ):
+
+        return FORMAT_WEBP
+
+    if (
+        signature.startswith(
+            TIFF_LE_SIGNATURE
+        )
+        or signature.startswith(
+            TIFF_BE_SIGNATURE
+        )
+    ):
+
+        return FORMAT_TIFF
 
     return FORMAT_UNSUPPORTED
 
