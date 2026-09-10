@@ -82,6 +82,13 @@ from photometa.presentation.scan import (
     format_segment_report,
 )
 
+from photometa.exporters.json_export import (
+    JsonExportError,
+    build_batch_scan_json_document,
+    build_scan_json_document,
+    serialize_json_document,
+)
+
 from photometa.hashing import (
     HashingError,
     calculate_hash,
@@ -161,7 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument(
         "path",
         type=Path,
-        help="JPEG file to scan.",
+        help=("JPEG file or directory to scan."),
     )
 
     scan_parser.add_argument(
@@ -180,6 +187,25 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Recursively scan files when "
             "PATH is a directory."
+        ),
+    )
+
+    scan_parser.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help=(
+            "Output machine-readable "
+            "JSON instead of text."
+        ),
+    )
+
+    scan_parser.add_argument(
+        "--include-sensitive",
+        action="store_true",
+        help=(
+            "Include exact GPS values "
+            "in single-file JSON output."
         ),
     )
 
@@ -449,11 +475,18 @@ def main(
                 recursive=(
                     args.recursive
                 ),
+                json_output=(
+                    args.json_output
+                ),
+                include_sensitive=(
+                    args.include_sensitive
+                ),
             )
 
         except (
             BatchAnalysisError,
             ComparisonError,
+            JsonExportError,
             JpegParserError,
             OSError,
         ) as exc:
@@ -633,7 +666,33 @@ def run_scan_command(
     path: Path,
     show_segments: bool = False,
     recursive: bool = False,
+    json_output: bool = False,
+    include_sensitive: bool = False,
 ) -> int:
+
+    if (
+        json_output
+        and show_segments
+    ):
+
+        raise JsonExportError(
+            (
+                "--json cannot be combined "
+                "with --segments."
+            )
+        )
+
+    if (
+        include_sensitive
+        and not json_output
+    ):
+
+        raise JsonExportError(
+            (
+                "--include-sensitive "
+                "requires --json."
+            )
+        )
 
     if path.is_dir():
 
@@ -647,14 +706,59 @@ def run_scan_command(
                 )
             )
 
+        if include_sensitive:
+
+            raise JsonExportError(
+                (
+                    "--include-sensitive is "
+                    "only available for "
+                    "single-file JSON scans."
+                )
+            )
+
         report = analyze_directory(
             path,
             recursive=recursive,
         )
 
+        if json_output:
+
+            document = (
+                build_batch_scan_json_document(
+                    report
+                )
+            )
+
+            print(
+                serialize_json_document(
+                    document
+                )
+            )
+
+            return 0
+
         print(
             format_batch_scan_report(
                 report
+            )
+        )
+
+        return 0
+
+    if json_output:
+
+        document = (
+            build_scan_json_document(
+                path,
+                include_sensitive=(
+                    include_sensitive
+                ),
+            )
+        )
+
+        print(
+            serialize_json_document(
+                document
             )
         )
 
