@@ -31,3 +31,6 @@ Thumbs.db
 
 # Python package build metadata
 *.egg-info/
+
+# Default generated PhotoMeta HTML report
+/report.html

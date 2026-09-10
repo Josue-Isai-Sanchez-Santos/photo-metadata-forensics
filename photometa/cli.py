@@ -94,6 +94,11 @@ from photometa.exporters.json_export import (
     serialize_json_document,
 )
 
+from photometa.exporters.html_report import (
+    HtmlReportError,
+    write_html_report,
+)
+
 from photometa.hashing import (
     HashingError,
     calculate_hash,
@@ -308,6 +313,35 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Include exact GPS coordinates "
             "when available."
+        ),
+    )
+
+    report_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help=(
+            "HTML output path. "
+            "Default: report.html"
+        ),
+    )
+
+    report_parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Replace an existing "
+            "HTML output file."
+        ),
+    )
+
+    report_parser.add_argument(
+        "--text",
+        action="store_true",
+        help=(
+            "Print the legacy text report "
+            "instead of creating HTML."
         ),
     )
 
@@ -578,9 +612,15 @@ def main(
                 include_sensitive=(
                     args.include_sensitive
                 ),
+                output=args.output,
+                force=args.force,
+                text_output=args.text,
             )
 
-        except FullReportError as exc:
+        except (
+            FullReportError,
+            HtmlReportError,
+        ) as exc:
 
             print(
                 f"error: {exc}",
@@ -1053,18 +1093,80 @@ def run_gps_command(
 def run_report_command(
     path: Path,
     include_sensitive: bool = False,
+    output: Path | None = None,
+    force: bool = False,
+    text_output: bool = False,
 ) -> int:
 
-    report = build_full_report(
-        path
+    if text_output:
+
+        if output is not None:
+
+            raise HtmlReportError(
+                (
+                    "--output cannot be "
+                    "combined with --text."
+                )
+            )
+
+        if force:
+
+            raise HtmlReportError(
+                (
+                    "--force cannot be "
+                    "combined with --text."
+                )
+            )
+
+        report = build_full_report(
+            path
+        )
+
+        print(
+            format_full_report(
+                report,
+                include_sensitive=(
+                    include_sensitive
+                ),
+            )
+        )
+
+        return 0
+
+    destination = (
+        output
+        if output is not None
+        else Path(
+            "report.html"
+        )
+    )
+
+    written = write_html_report(
+        path,
+        destination,
+        include_sensitive=(
+            include_sensitive
+        ),
+        force=force,
+    )
+
+    print("HTML REPORT")
+    print("-" * 60)
+
+    print(
+        f"Source:    {path}"
     )
 
     print(
-        format_full_report(
-            report,
-            include_sensitive=(
-                include_sensitive
-            ),
+        f"Output:    {written}"
+    )
+
+    print(
+        "GPS data:  "
+        + (
+            "included"
+            if include_sensitive
+            else "exact coordinates hidden"
         )
     )
 

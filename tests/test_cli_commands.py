@@ -325,6 +325,7 @@ class TestCliCommands(
                 [
                     "report",
                     str(path),
+                    "--text",
                 ]
             )
         )
@@ -369,6 +370,7 @@ class TestCliCommands(
                 [
                     "report",
                     str(path),
+                    "--text",
                     "--include-sensitive",
                 ]
             )
