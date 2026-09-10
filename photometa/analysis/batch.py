@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from photometa.analysis.comparison import (
+    PRESENCE_NO,
     PRESENCE_YES,
     ComparisonError,
     inspect_image_for_comparison,
@@ -49,6 +50,23 @@ class BatchFileResult:
     path: Path
 
     detected_format: str
+
+    size_bytes: int | None = None
+
+    sha256: str | None = None
+
+    width: int | None = None
+    height: int | None = None
+
+    jpeg_process: str | None = None
+
+    exif_status: str | None = None
+    gps_status: str | None = None
+    xmp_status: str | None = None
+    iptc_status: str | None = None
+    icc_status: str | None = None
+
+    camera_model: str | None = None
 
     gps_detected: bool | None = None
 
@@ -202,6 +220,10 @@ def analyze_directory(
     path: str | Path,
     *,
     recursive: bool = False,
+    exclude_paths: tuple[
+        str | Path,
+        ...
+    ] = (),
 ) -> BatchReport:
 
     root = Path(
@@ -224,6 +246,14 @@ def analyze_directory(
 
     root = root.resolve()
 
+    excluded = {
+        Path(
+            current
+        ).resolve()
+        for current
+        in exclude_paths
+    }
+
     try:
 
         if recursive:
@@ -245,7 +275,13 @@ def analyze_directory(
             )
 
         files = sorted(
-            candidates,
+            (
+                candidate
+                for candidate
+                in candidates
+                if candidate.resolve()
+                not in excluded
+            ),
             key=lambda item: (
                 str(item).casefold()
             ),
@@ -322,6 +358,16 @@ def _analyze_batch_file(
 
     try:
 
+        size_bytes = (
+            path.stat().st_size
+        )
+
+    except OSError:
+
+        size_bytes = None
+
+    try:
+
         detected_format = (
             detect_batch_file_format(
                 path
@@ -335,6 +381,7 @@ def _analyze_batch_file(
             detected_format=(
                 FORMAT_UNSUPPORTED
             ),
+            size_bytes=size_bytes,
             error=str(
                 exc
             ),
@@ -350,12 +397,8 @@ def _analyze_batch_file(
             detected_format=(
                 detected_format
             ),
+            size_bytes=size_bytes,
         )
-
-    gps_detected: (
-        bool
-        | None
-    ) = None
 
     try:
 
@@ -363,11 +406,6 @@ def _analyze_batch_file(
             inspect_image_for_comparison(
                 path
             )
-        )
-
-        gps_detected = (
-            snapshot.gps
-            == PRESENCE_YES
         )
 
     except (
@@ -381,13 +419,75 @@ def _analyze_batch_file(
             detected_format=(
                 FORMAT_JPEG
             ),
-            gps_detected=(
-                gps_detected
-            ),
+            size_bytes=size_bytes,
             error=str(
                 exc
             ),
         )
+
+    if (
+        snapshot.gps
+        == PRESENCE_YES
+    ):
+
+        gps_detected: (
+            bool
+            | None
+        ) = True
+
+    elif (
+        snapshot.gps
+        == PRESENCE_NO
+    ):
+
+        gps_detected = False
+
+    else:
+
+        gps_detected = None
+
+    common = {
+        "path": path.resolve(),
+        "detected_format": (
+            FORMAT_JPEG
+        ),
+        "size_bytes": (
+            snapshot.size_bytes
+        ),
+        "sha256": (
+            snapshot.sha256
+        ),
+        "width": (
+            snapshot.width
+        ),
+        "height": (
+            snapshot.height
+        ),
+        "jpeg_process": (
+            snapshot.jpeg_process
+        ),
+        "exif_status": (
+            snapshot.exif
+        ),
+        "gps_status": (
+            snapshot.gps
+        ),
+        "xmp_status": (
+            snapshot.xmp
+        ),
+        "iptc_status": (
+            snapshot.iptc
+        ),
+        "icc_status": (
+            snapshot.icc
+        ),
+        "camera_model": (
+            snapshot.camera_model
+        ),
+        "gps_detected": (
+            gps_detected
+        ),
+    }
 
     try:
 
@@ -411,26 +511,14 @@ def _analyze_batch_file(
     ) as exc:
 
         return BatchFileResult(
-            path=path.resolve(),
-            detected_format=(
-                FORMAT_JPEG
-            ),
-            gps_detected=(
-                gps_detected
-            ),
+            **common,
             error=str(
                 exc
             ),
         )
 
     return BatchFileResult(
-        path=path.resolve(),
-        detected_format=(
-            FORMAT_JPEG
-        ),
-        gps_detected=(
-            gps_detected
-        ),
+        **common,
         privacy_points=(
             privacy_score.points
         ),

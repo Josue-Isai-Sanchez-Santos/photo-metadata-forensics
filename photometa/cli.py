@@ -82,6 +82,11 @@ from photometa.presentation.scan import (
     format_segment_report,
 )
 
+from photometa.exporters.csv_export import (
+    CsvExportError,
+    write_batch_csv,
+)
+
 from photometa.exporters.json_export import (
     JsonExportError,
     build_batch_scan_json_document,
@@ -206,6 +211,18 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Include exact GPS values "
             "in single-file JSON output."
+        ),
+    )
+
+    scan_parser.add_argument(
+        "--csv",
+        dest="csv_output",
+        type=Path,
+        default=None,
+        metavar="OUTPUT",
+        help=(
+            "Export a directory scan "
+            "to a CSV file."
         ),
     )
 
@@ -481,11 +498,15 @@ def main(
                 include_sensitive=(
                     args.include_sensitive
                 ),
+                csv_output=(
+                    args.csv_output
+                ),
             )
 
         except (
             BatchAnalysisError,
             ComparisonError,
+            CsvExportError,
             JsonExportError,
             JpegParserError,
             OSError,
@@ -668,7 +689,44 @@ def run_scan_command(
     recursive: bool = False,
     json_output: bool = False,
     include_sensitive: bool = False,
+    csv_output: Path | None = None,
 ) -> int:
+
+    if (
+        json_output
+        and csv_output is not None
+    ):
+
+        raise CsvExportError(
+            (
+                "--json cannot be combined "
+                "with --csv."
+            )
+        )
+
+    if (
+        csv_output is not None
+        and show_segments
+    ):
+
+        raise CsvExportError(
+            (
+                "--csv cannot be combined "
+                "with --segments."
+            )
+        )
+
+    if (
+        csv_output is not None
+        and include_sensitive
+    ):
+
+        raise CsvExportError(
+            (
+                "--include-sensitive is "
+                "not available with --csv."
+            )
+        )
 
     if (
         json_output
@@ -696,6 +754,79 @@ def run_scan_command(
 
     if path.is_dir():
 
+        exclusions: tuple[
+            Path,
+            ...
+        ] = ()
+
+        if csv_output is not None:
+
+            exclusions = (
+                csv_output,
+            )
+
+        report = analyze_directory(
+            path,
+            recursive=recursive,
+            exclude_paths=(
+                exclusions
+            ),
+        )
+
+        if csv_output is not None:
+
+            result = (
+                write_batch_csv(
+                    report,
+                    csv_output,
+                )
+            )
+
+            print("CSV EXPORT")
+            print("-" * 60)
+
+            print(
+                "Directory:  "
+                f"{report.root}"
+            )
+
+            print(
+                "Output:     "
+                f"{result.output_path}"
+            )
+
+            print(
+                "Rows:       "
+                f"{result.row_count}"
+            )
+
+            print(
+                "Recursive:  "
+                + (
+                    "YES"
+                    if recursive
+                    else "NO"
+                )
+            )
+
+            return 0
+
+        if json_output:
+
+            document = (
+                build_batch_scan_json_document(
+                    report
+                )
+            )
+
+            print(
+                serialize_json_document(
+                    document
+                )
+            )
+
+            return 0
+
         if show_segments:
 
             raise BatchAnalysisError(
@@ -716,27 +847,6 @@ def run_scan_command(
                 )
             )
 
-        report = analyze_directory(
-            path,
-            recursive=recursive,
-        )
-
-        if json_output:
-
-            document = (
-                build_batch_scan_json_document(
-                    report
-                )
-            )
-
-            print(
-                serialize_json_document(
-                    document
-                )
-            )
-
-            return 0
-
         print(
             format_batch_scan_report(
                 report
@@ -744,6 +854,15 @@ def run_scan_command(
         )
 
         return 0
+
+    if csv_output is not None:
+
+        raise CsvExportError(
+            (
+                "--csv requires a "
+                "directory input."
+            )
+        )
 
     if json_output:
 
