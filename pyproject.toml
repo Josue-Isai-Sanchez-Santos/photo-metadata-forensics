@@ -12,6 +12,11 @@ dependencies = [
     "Pillow>=11.0",
 ]
 
+[project.optional-dependencies]
+heif = [
+    "pillow-heif>=1.7,<2",
+]
+
 [project.scripts]
 photometa = "photometa.cli:main"
 

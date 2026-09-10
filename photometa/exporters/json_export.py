@@ -394,6 +394,9 @@ def build_batch_scan_json_document(
                 "tiff": (
                     report.tiff_count
                 ),
+                "heif": (
+                    report.heif_count
+                ),
                 "unsupported": (
                     report.unsupported_count
                 ),

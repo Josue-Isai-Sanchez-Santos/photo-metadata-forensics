@@ -18,6 +18,10 @@ from photometa.analysis.privacy_score import (
     LEVEL_MEDIUM,
     calculate_privacy_exposure_score,
 )
+from photometa.formats.heif_backend import (
+    detect_heif_container,
+)
+
 from photometa.parsers.iptc import (
     IptcParserError,
 )
@@ -33,6 +37,7 @@ FORMAT_JPEG = "JPEG"
 FORMAT_PNG = "PNG"
 FORMAT_WEBP = "WEBP"
 FORMAT_TIFF = "TIFF"
+FORMAT_HEIF = "HEIF"
 FORMAT_UNSUPPORTED = "UNSUPPORTED"
 
 
@@ -161,6 +166,17 @@ class BatchReport:
         return sum(
             item.detected_format
             == FORMAT_TIFF
+            for item in self.items
+        )
+
+    @property
+    def heif_count(
+        self,
+    ) -> int:
+
+        return sum(
+            item.detected_format
+            == FORMAT_HEIF
             for item in self.items
         )
 
@@ -401,6 +417,22 @@ def detect_batch_file_format(
     ):
 
         return FORMAT_TIFF
+
+    try:
+
+        heif = (
+            detect_heif_container(
+                file_path
+            )
+        )
+
+    except Exception:
+
+        heif = None
+
+    if heif is not None:
+
+        return FORMAT_HEIF
 
     return FORMAT_UNSUPPORTED
 

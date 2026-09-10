@@ -53,6 +53,11 @@ def format_batch_scan_report(
             "(recognized, BASIC single-file scan)"
         ),
         (
+            f"{report.heif_count:>5} "
+            "HEIC/HEIF "
+            "(recognized, OPTIONAL BASIC scan)"
+        ),
+        (
             f"{report.unsupported_count:>5} "
             "unsupported"
         ),
@@ -158,6 +163,11 @@ def format_batch_privacy_report(
         (
             f"TIFF:                   "
             f"{report.tiff_count} "
+            "(privacy not analyzed)"
+        ),
+        (
+            f"HEIC/HEIF:              "
+            f"{report.heif_count} "
             "(privacy not analyzed)"
         ),
         (

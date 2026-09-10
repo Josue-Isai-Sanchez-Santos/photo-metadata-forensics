@@ -99,6 +99,16 @@ from photometa.exporters.html_report import (
     write_html_report,
 )
 
+from photometa.formats.heif_backend import (
+    HeifBackendUnavailable,
+    HeifInspectionError,
+    detect_heif_container,
+    inspect_heif_image,
+)
+from photometa.presentation.heif_scan import (
+    format_heif_scan_report,
+)
+
 from photometa.formats.pillow_backend import (
     FORMAT_JPEG,
     AdditionalFormatError,
@@ -549,6 +559,8 @@ def main(
 
         except (
             AdditionalFormatError,
+            HeifBackendUnavailable,
+            HeifInspectionError,
             BatchAnalysisError,
             ComparisonError,
             CsvExportError,
@@ -914,6 +926,47 @@ def run_scan_command(
                 "directory input."
             )
         )
+
+    heif_container = (
+        detect_heif_container(
+            path
+        )
+    )
+
+    if heif_container is not None:
+
+        if show_segments:
+
+            raise HeifInspectionError(
+                (
+                    "--segments is a "
+                    "JPEG-only operation."
+                )
+            )
+
+        if json_output:
+
+            raise HeifInspectionError(
+                (
+                    "Single-file JSON export "
+                    "is not yet implemented "
+                    "for HEIC/HEIF."
+                )
+            )
+
+        snapshot = (
+            inspect_heif_image(
+                path
+            )
+        )
+
+        print(
+            format_heif_scan_report(
+                snapshot
+            )
+        )
+
+        return 0
 
     format_name = (
         detect_scan_format(
