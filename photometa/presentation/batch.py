@@ -58,6 +58,11 @@ def format_batch_scan_report(
             "(recognized, OPTIONAL BASIC scan)"
         ),
         (
+            f"{report.raw_count:>5} "
+            "RAW "
+            "(LibRaw-validated, OPTIONAL BASIC scan)"
+        ),
+        (
             f"{report.unsupported_count:>5} "
             "unsupported"
         ),
@@ -168,6 +173,11 @@ def format_batch_privacy_report(
         (
             f"HEIC/HEIF:              "
             f"{report.heif_count} "
+            "(privacy not analyzed)"
+        ),
+        (
+            f"RAW:                    "
+            f"{report.raw_count} "
             "(privacy not analyzed)"
         ),
         (

@@ -99,6 +99,16 @@ from photometa.exporters.html_report import (
     write_html_report,
 )
 
+from photometa.formats.raw_backend import (
+    RawBackendUnavailable,
+    RawInspectionError,
+    is_raw_candidate_path,
+    inspect_raw_image,
+)
+from photometa.presentation.raw_scan import (
+    format_raw_scan_report,
+)
+
 from photometa.formats.heif_backend import (
     HeifBackendUnavailable,
     HeifInspectionError,
@@ -559,6 +569,8 @@ def main(
 
         except (
             AdditionalFormatError,
+            RawBackendUnavailable,
+            RawInspectionError,
             HeifBackendUnavailable,
             HeifInspectionError,
             BatchAnalysisError,
@@ -926,6 +938,43 @@ def run_scan_command(
                 "directory input."
             )
         )
+
+    if is_raw_candidate_path(
+        path
+    ):
+
+        if show_segments:
+
+            raise RawInspectionError(
+                (
+                    "--segments is a "
+                    "JPEG-only operation."
+                )
+            )
+
+        if json_output:
+
+            raise RawInspectionError(
+                (
+                    "Single-file JSON export "
+                    "is not yet implemented "
+                    "for RAW."
+                )
+            )
+
+        snapshot = (
+            inspect_raw_image(
+                path
+            )
+        )
+
+        print(
+            format_raw_scan_report(
+                snapshot
+            )
+        )
+
+        return 0
 
     heif_container = (
         detect_heif_container(

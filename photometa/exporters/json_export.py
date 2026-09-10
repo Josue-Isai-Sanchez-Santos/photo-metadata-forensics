@@ -397,6 +397,9 @@ def build_batch_scan_json_document(
                 "heif": (
                     report.heif_count
                 ),
+                "raw": (
+                    report.raw_count
+                ),
                 "unsupported": (
                     report.unsupported_count
                 ),

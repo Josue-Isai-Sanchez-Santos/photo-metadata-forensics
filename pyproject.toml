@@ -17,6 +17,11 @@ heif = [
     "pillow-heif>=1.7,<2",
 ]
 
+raw = [
+    "rawpy>=0.27,<0.28",
+]
+
+
 [project.scripts]
 photometa = "photometa.cli:main"
 

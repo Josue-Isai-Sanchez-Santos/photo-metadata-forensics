@@ -18,6 +18,13 @@ from photometa.analysis.privacy_score import (
     LEVEL_MEDIUM,
     calculate_privacy_exposure_score,
 )
+from photometa.formats.raw_backend import (
+    RawBackendUnavailable,
+    is_raw_candidate_path,
+    probe_raw_file,
+    raw_backend_available,
+)
+
 from photometa.formats.heif_backend import (
     detect_heif_container,
 )
@@ -38,6 +45,7 @@ FORMAT_PNG = "PNG"
 FORMAT_WEBP = "WEBP"
 FORMAT_TIFF = "TIFF"
 FORMAT_HEIF = "HEIF"
+FORMAT_RAW = "RAW"
 FORMAT_UNSUPPORTED = "UNSUPPORTED"
 
 
@@ -177,6 +185,17 @@ class BatchReport:
         return sum(
             item.detected_format
             == FORMAT_HEIF
+            for item in self.items
+        )
+
+    @property
+    def raw_count(
+        self,
+    ) -> int:
+
+        return sum(
+            item.detected_format
+            == FORMAT_RAW
             for item in self.items
         )
 
@@ -406,6 +425,39 @@ def detect_batch_file_format(
     ):
 
         return FORMAT_WEBP
+
+    #
+    # RAW must be checked before TIFF.
+    #
+    # DNG and several camera RAW formats
+    # use TIFF-derived structures and
+    # otherwise could be mislabeled TIFF.
+    #
+    if is_raw_candidate_path(
+        file_path
+    ):
+
+        if not raw_backend_available():
+
+            return FORMAT_UNSUPPORTED
+
+        try:
+
+            if probe_raw_file(
+                file_path
+            ):
+
+                return FORMAT_RAW
+
+        except RawBackendUnavailable:
+
+            return FORMAT_UNSUPPORTED
+
+        #
+        # Candidate extension alone is not
+        # sufficient evidence of a valid RAW.
+        #
+        return FORMAT_UNSUPPORTED
 
     if (
         signature.startswith(
