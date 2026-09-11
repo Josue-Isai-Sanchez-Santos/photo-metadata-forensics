@@ -99,6 +99,14 @@ from photometa.exporters.html_report import (
     write_html_report,
 )
 
+from photometa.backends.exiftool_backend import (
+    ExifToolBackendError,
+    inspect_with_exiftool,
+)
+from photometa.presentation.exiftool_scan import (
+    format_exiftool_scan_report,
+)
+
 from photometa.formats.raw_backend import (
     RawBackendUnavailable,
     RawInspectionError,
@@ -209,6 +217,21 @@ def build_parser() -> argparse.ArgumentParser:
         "path",
         type=Path,
         help=("Image file or directory to scan."),
+    )
+
+    scan_parser.add_argument(
+        "--backend",
+        choices=(
+            "native",
+            "exiftool",
+        ),
+        default="native",
+        help=(
+            "Metadata backend. "
+            "Default: native. "
+            "Use exiftool for the optional "
+            "external compatibility backend."
+        ),
     )
 
     scan_parser.add_argument(
@@ -565,9 +588,13 @@ def main(
                 csv_output=(
                     args.csv_output
                 ),
+                backend=(
+                    args.backend
+                ),
             )
 
         except (
+            ExifToolBackendError,
             AdditionalFormatError,
             RawBackendUnavailable,
             RawInspectionError,
@@ -765,7 +792,86 @@ def run_scan_command(
     json_output: bool = False,
     include_sensitive: bool = False,
     csv_output: Path | None = None,
+    backend: str = "native",
 ) -> int:
+
+    if backend == "exiftool":
+
+        if path.is_dir():
+
+            raise ExifToolBackendError(
+                (
+                    "--backend exiftool "
+                    "currently supports only "
+                    "a single file."
+                )
+            )
+
+        if recursive:
+
+            raise ExifToolBackendError(
+                (
+                    "--recursive is not "
+                    "available with "
+                    "--backend exiftool."
+                )
+            )
+
+        if show_segments:
+
+            raise ExifToolBackendError(
+                (
+                    "--segments belongs to "
+                    "PhotoMeta's native JPEG "
+                    "parser and cannot be "
+                    "combined with "
+                    "--backend exiftool."
+                )
+            )
+
+        if json_output:
+
+            raise ExifToolBackendError(
+                (
+                    "PhotoMeta JSON export "
+                    "is not yet available "
+                    "with --backend exiftool."
+                )
+            )
+
+        if csv_output is not None:
+
+            raise ExifToolBackendError(
+                (
+                    "CSV batch export is not "
+                    "yet available with "
+                    "--backend exiftool."
+                )
+            )
+
+        if include_sensitive:
+
+            raise ExifToolBackendError(
+                (
+                    "--include-sensitive is "
+                    "not currently available "
+                    "with --backend exiftool."
+                )
+            )
+
+        snapshot = (
+            inspect_with_exiftool(
+                path
+            )
+        )
+
+        print(
+            format_exiftool_scan_report(
+                snapshot
+            )
+        )
+
+        return 0
 
     if (
         json_output
