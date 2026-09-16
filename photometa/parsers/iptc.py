@@ -8,6 +8,10 @@ from photometa.parsers.jpeg import (
     JpegSegment,
     iter_jpeg_segments,
 )
+from photometa.parsers.limits import (
+    DEFAULT_PARSER_LIMITS,
+    ParserLimits,
+)
 
 
 PHOTOSHOP_IDENTIFIER = (
@@ -312,6 +316,8 @@ def is_photoshop_app13(
 
 def parse_photoshop_resources(
     segment: JpegSegment,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> tuple[
     PhotoshopResource,
     ...
@@ -331,6 +337,15 @@ def parse_photoshop_resources(
 
     data = segment.payload
 
+    if (
+        len(data)
+        > limits.max_photoshop_payload_bytes
+    ):
+        raise IptcParserError(
+            "El APP13 Photoshop excede el "
+            "límite de seguridad."
+        )
+
     position = len(
         PHOTOSHOP_IDENTIFIER
     )
@@ -340,6 +355,15 @@ def parse_photoshop_resources(
     ] = []
 
     while position < len(data):
+
+        if (
+            len(resources)
+            >= limits.max_photoshop_resources
+        ):
+            raise IptcParserError(
+                "Se excedió el límite de "
+                "Photoshop Image Resources."
+            )
 
         if (
             len(data) - position
@@ -434,16 +458,31 @@ def parse_photoshop_resources(
 
         position += 4
 
-        resource_end = (
-            position
-            + resource_size
-        )
+        if (
+            resource_size
+            > limits.max_photoshop_resource_bytes
+        ):
+            raise IptcParserError(
+                "Un Photoshop Image Resource "
+                "excede el límite de seguridad."
+            )
 
-        if resource_end > len(data):
+        if (
+            resource_size
+            > (
+                len(data)
+                - position
+            )
+        ):
             raise IptcParserError(
                 "Datos Photoshop "
                 "Resource truncados."
             )
+
+        resource_end = (
+            position
+            + resource_size
+        )
 
         resource_data = data[
             position:
@@ -483,6 +522,8 @@ def parse_photoshop_resources(
 
 def extract_iptc_resource(
     segment: JpegSegment,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> bytes | None:
     """
     Devuelve el recurso IPTC-NAA 0x0404
@@ -491,7 +532,8 @@ def extract_iptc_resource(
 
     for resource in (
         parse_photoshop_resources(
-            segment
+            segment,
+            limits=limits,
         )
     ):
 
@@ -506,6 +548,8 @@ def extract_iptc_resource(
 
 def parse_iptc_iim(
     data: bytes,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> IptcMetadata:
     """
     Analiza una secuencia IPTC IIM.
@@ -519,9 +563,19 @@ def parse_iptc_iim(
         value
     """
 
+    if (
+        len(data)
+        > limits.max_iptc_data_bytes
+    ):
+        raise IptcParserError(
+            "Los datos IPTC exceden el "
+            "límite de seguridad."
+        )
+
     raw_datasets = (
         _parse_raw_datasets(
-            data
+            data,
+            limits=limits,
         )
     )
 
@@ -588,6 +642,8 @@ def parse_iptc_iim(
 
 def extract_iptc_from_jpeg(
     path: str | Path,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> IptcMetadata | None:
     """
     Extrae el primer recurso IPTC-NAA
@@ -597,7 +653,8 @@ def extract_iptc_from_jpeg(
     """
 
     for segment in iter_jpeg_segments(
-        path
+        path,
+        limits=limits,
     ):
 
         if not is_photoshop_app13(
@@ -606,12 +663,14 @@ def extract_iptc_from_jpeg(
             continue
 
         resource = extract_iptc_resource(
-            segment
+            segment,
+            limits=limits,
         )
 
         if resource is not None:
             return parse_iptc_iim(
-                resource
+                resource,
+                limits=limits,
             )
 
     return None
@@ -619,6 +678,8 @@ def extract_iptc_from_jpeg(
 
 def _parse_raw_datasets(
     data: bytes,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> list[
     tuple[
         int,
@@ -638,6 +699,15 @@ def _parse_raw_datasets(
     ] = []
 
     while position < len(data):
+
+        if (
+            len(datasets)
+            >= limits.max_iptc_datasets
+        ):
+            raise IptcParserError(
+                "Se excedió el límite de "
+                "DataSets IPTC."
+            )
 
         if (
             len(data) - position
@@ -712,9 +782,20 @@ def _parse_raw_datasets(
                 )
 
             if (
-                position
-                + length_octets
-                > len(data)
+                length_octets
+                > limits.max_iptc_length_octets
+            ):
+                raise IptcParserError(
+                    "Descriptor de longitud IPTC "
+                    "excesivamente grande."
+                )
+
+            if (
+                length_octets
+                > (
+                    len(data)
+                    - position
+                )
             ):
                 raise IptcParserError(
                     "Descriptor de longitud "
@@ -736,15 +817,30 @@ def _parse_raw_datasets(
                 length_octets
             )
 
+        if (
+            value_length
+            > limits.max_iptc_value_bytes
+        ):
+            raise IptcParserError(
+                "Un valor IPTC excede el "
+                "límite de seguridad."
+            )
+
+        if (
+            value_length
+            > (
+                len(data)
+                - position
+            )
+        ):
+            raise IptcParserError(
+                "Valor IPTC truncado."
+            )
+
         value_end = (
             position
             + value_length
         )
-
-        if value_end > len(data):
-            raise IptcParserError(
-                "Valor IPTC truncado."
-            )
 
         raw_value = data[
             position:value_end

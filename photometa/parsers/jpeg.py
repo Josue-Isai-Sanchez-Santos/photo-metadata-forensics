@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Iterator
 
+from photometa.parsers.limits import (
+    DEFAULT_PARSER_LIMITS,
+    ParserLimits,
+)
+
 
 class JpegParserError(Exception):
     """Base exception for JPEG parsing errors."""
@@ -88,7 +93,10 @@ def _read_exact(
     return data
 
 
-def _read_marker_code(file: BinaryIO) -> tuple[int, int]:
+def _read_marker_code(
+    file: BinaryIO,
+    limits: ParserLimits,
+) -> tuple[int, int]:
     """
     Lee el siguiente marcador JPEG fuera de los datos
     comprimidos de imagen.
@@ -121,7 +129,21 @@ def _read_marker_code(file: BinaryIO) -> tuple[int, int]:
 
     # Pueden existir bytes FF de relleno antes del
     # código real del marcador.
+    fill_count = 0
+
     while code == b"\xFF":
+
+        fill_count += 1
+
+        if (
+            fill_count
+            > limits.max_jpeg_marker_fill_bytes
+        ):
+            raise JpegParserError(
+                "Se excedió el límite de bytes FF "
+                "de relleno antes de un marcador JPEG."
+            )
+
         code = _read_exact(
             file,
             1,
@@ -139,9 +161,30 @@ def _read_marker_code(file: BinaryIO) -> tuple[int, int]:
 
 def iter_jpeg_segments(
     path: str | Path,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> Iterator[JpegSegment]:
 
     image_path = Path(path)
+
+    try:
+        file_size = image_path.stat().st_size
+
+    except OSError as exc:
+        raise JpegParserError(
+            f"No se pudo consultar el archivo JPEG: {exc}"
+        ) from exc
+
+    if (
+        file_size
+        > limits.max_input_file_bytes
+    ):
+        raise JpegParserError(
+            "El archivo excede el límite de seguridad "
+            "para el parser JPEG: "
+            f"{file_size} bytes > "
+            f"{limits.max_input_file_bytes} bytes."
+        )
 
     with image_path.open("rb") as file:
 
@@ -163,9 +206,26 @@ def iter_jpeg_segments(
             name="SOI",
         )
 
+        segments_seen = 1
+        header_payload_bytes = 0
+
         while True:
 
-            offset, marker = _read_marker_code(file)
+            offset, marker = _read_marker_code(
+                file,
+                limits,
+            )
+
+            segments_seen += 1
+
+            if (
+                segments_seen
+                > limits.max_jpeg_segments
+            ):
+                raise JpegParserError(
+                    "Se excedió el límite de segmentos "
+                    "JPEG antes de finalizar el análisis."
+                )
 
             name = MARKER_NAMES.get(
                 marker,
@@ -204,6 +264,32 @@ def iter_jpeg_segments(
                 )
 
             payload_length = declared_length - 2
+
+            if (
+                payload_length
+                > limits.max_jpeg_segment_payload_bytes
+            ):
+                raise JpegParserError(
+                    "El payload JPEG excede el límite "
+                    "permitido: "
+                    f"{payload_length} bytes."
+                )
+
+            if (
+                payload_length
+                > (
+                    limits.max_jpeg_header_payload_bytes
+                    - header_payload_bytes
+                )
+            ):
+                raise JpegParserError(
+                    "Se excedió el presupuesto acumulado "
+                    "de payload del encabezado JPEG."
+                )
+
+            header_payload_bytes += (
+                payload_length
+            )
 
             payload = _read_exact(
                 file,

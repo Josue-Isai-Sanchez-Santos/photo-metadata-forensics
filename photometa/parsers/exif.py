@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from photometa.parsers.jpeg import JpegSegment
+from photometa.parsers.limits import (
+    DEFAULT_PARSER_LIMITS,
+    ParserLimits,
+)
 from photometa.parsers.tiff import (
     Ifd,
     TiffHeader,
@@ -72,6 +76,8 @@ def parse_exif_tiff_header(
 
 def parse_exif(
     segment: JpegSegment,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> ExifData:
     """
     Interpreta la estructura TIFF principal
@@ -87,6 +93,7 @@ def parse_exif(
             tiff_data,
             header.first_ifd_offset,
             header.byte_order,
+            limits=limits,
         )
 
     except TiffParserError as exc:

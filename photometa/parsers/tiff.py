@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import TypeAlias
 
+from photometa.parsers.limits import (
+    DEFAULT_PARSER_LIMITS,
+    ParserLimits,
+)
+
 
 class TiffParserError(Exception):
     """Base exception for TIFF/EXIF parsing errors."""
@@ -93,6 +98,35 @@ class IfdEntry:
         )
 
 
+@dataclass
+class IfdTraversalState:
+    visited_offsets: set[int]
+    nodes_visited: int = 0
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        root_offset: int | None = None,
+    ) -> "IfdTraversalState":
+
+        visited_offsets: set[int] = set()
+        nodes_visited = 0
+
+        if root_offset is not None:
+
+            visited_offsets.add(
+                root_offset
+            )
+
+            nodes_visited = 1
+
+        return cls(
+            visited_offsets=visited_offsets,
+            nodes_visited=nodes_visited,
+        )
+
+
 @dataclass(frozen=True)
 class Ifd:
     offset: int
@@ -157,6 +191,8 @@ def parse_ifd(
     data: bytes,
     offset: int,
     byte_order: str,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> Ifd:
     """
     Interpreta un Image File Directory (IFD).
@@ -170,41 +206,59 @@ def parse_ifd(
 
     _validate_byte_order(byte_order)
 
-    if offset < 0:
+    if offset < 8:
         raise TiffParserError(
-            "El offset del IFD no puede ser negativo."
+            "El offset de un IFD debe estar "
+            "después de la cabecera TIFF: "
+            f"{offset}."
         )
 
-    if offset + 2 > len(data):
-        raise TiffParserError(
-            f"El offset IFD {offset} está fuera "
-            "de los límites del TIFF."
-        )
+    _validate_span(
+        start=offset,
+        length=2,
+        total_size=len(data),
+        context="cabecera del IFD",
+    )
 
     entry_count = int.from_bytes(
         data[offset:offset + 2],
         byteorder=byte_order,
     )
 
+    if (
+        entry_count
+        > limits.max_ifd_entries
+    ):
+        raise TiffParserError(
+            "El IFD declara demasiadas entradas: "
+            f"{entry_count} > "
+            f"{limits.max_ifd_entries}."
+        )
+
     entries_start = offset + 2
-    entries_size = entry_count * 12
+
+    entries_size = (
+        entry_count * 12
+    )
+
+    _validate_span(
+        start=entries_start,
+        length=entries_size,
+        total_size=len(data),
+        context="tabla de entradas IFD",
+    )
 
     next_ifd_position = (
         entries_start
         + entries_size
     )
 
-    required_size = (
-        next_ifd_position
-        + 4
+    _validate_span(
+        start=next_ifd_position,
+        length=4,
+        total_size=len(data),
+        context="puntero al siguiente IFD",
     )
-
-    if required_size > len(data):
-        raise TiffParserError(
-            "El IFD está truncado: "
-            f"declara {entry_count} entradas, "
-            "pero no hay suficientes bytes."
-        )
 
     entries: list[IfdEntry] = []
 
@@ -261,6 +315,27 @@ def parse_ifd(
         byteorder=byte_order,
     )
 
+    if next_ifd_offset != 0:
+
+        if next_ifd_offset == offset:
+            raise TiffParserError(
+                "El IFD contiene un puntero "
+                "next_ifd auto-referencial."
+            )
+
+        if next_ifd_offset < 8:
+            raise TiffParserError(
+                "El puntero next_ifd apunta "
+                "dentro de la cabecera TIFF."
+            )
+
+        _validate_span(
+            start=next_ifd_offset,
+            length=2,
+            total_size=len(data),
+            context="siguiente IFD",
+        )
+
     return Ifd(
         offset=offset,
         entries=tuple(entries),
@@ -268,8 +343,80 @@ def parse_ifd(
     )
 
 
+def parse_ifd_guarded(
+    data: bytes,
+    offset: int,
+    byte_order: str,
+    *,
+    state: IfdTraversalState,
+    depth: int,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
+) -> Ifd:
+    """
+    Parse one IFD while enforcing traversal
+    budgets and detecting repeated offsets.
+
+    Re-visiting an offset is treated as a
+    circular pointer rather than silently
+    parsing the same IFD again.
+    """
+
+    if depth < 0:
+
+        raise TiffParserError(
+            "La profundidad IFD no puede "
+            "ser negativa."
+        )
+
+    if (
+        depth
+        > limits.max_ifd_depth
+    ):
+
+        raise TiffParserError(
+            "Se excedió la profundidad "
+            "máxima de recorrido IFD: "
+            f"{depth} > "
+            f"{limits.max_ifd_depth}."
+        )
+
+    if offset in state.visited_offsets:
+
+        raise TiffParserError(
+            "Se detectó un puntero IFD "
+            "circular o repetido: "
+            f"offset={offset}."
+        )
+
+    if (
+        state.nodes_visited
+        >= limits.max_ifd_nodes
+    ):
+
+        raise TiffParserError(
+            "Se excedió el número máximo "
+            "de IFDs permitidos durante "
+            "el recorrido."
+        )
+
+    state.visited_offsets.add(
+        offset
+    )
+
+    state.nodes_visited += 1
+
+    return parse_ifd(
+        data,
+        offset,
+        byte_order,
+        limits=limits,
+    )
+
+
 def get_ifd_entry_data_size(
     entry: IfdEntry,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> int:
     """
     Calcula cuántos bytes ocupa el valor
@@ -286,13 +433,53 @@ def get_ifd_entry_data_size(
             f"{entry.field_type}."
         )
 
-    return type_size * entry.count
+    if (
+        entry.count
+        > limits.max_tiff_components
+    ):
+        raise TiffParserError(
+            "El valor TIFF declara demasiados "
+            "componentes: "
+            f"{entry.count} > "
+            f"{limits.max_tiff_components}."
+        )
+
+    if (
+        entry.count
+        > (
+            limits.max_tiff_value_bytes
+            // type_size
+        )
+    ):
+        raise TiffParserError(
+            "El valor TIFF excede el límite "
+            "de bytes permitido."
+        )
+
+    data_size = (
+        type_size
+        * entry.count
+    )
+
+    if (
+        data_size
+        > limits.max_tiff_value_bytes
+    ):
+        raise TiffParserError(
+            "El valor TIFF excede el límite "
+            "de bytes permitido: "
+            f"{data_size} bytes."
+        )
+
+    return data_size
 
 
 def get_ifd_entry_raw_value(
     data: bytes,
     entry: IfdEntry,
     byte_order: str,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> bytes:
     """
     Obtiene los bytes reales asociados a una
@@ -315,7 +502,8 @@ def get_ifd_entry_raw_value(
         )
 
     data_size = get_ifd_entry_data_size(
-        entry
+        entry,
+        limits=limits,
     )
 
     if data_size <= 4:
@@ -328,19 +516,20 @@ def get_ifd_entry_raw_value(
         byteorder=byte_order,
     )
 
+    _validate_span(
+        start=value_offset,
+        length=data_size,
+        total_size=len(data),
+        context=(
+            "valor TIFF externo "
+            f"del tag {entry.tag_hex}"
+        ),
+    )
+
     value_end = (
         value_offset
         + data_size
     )
-
-    if value_end > len(data):
-        raise TiffParserError(
-            "El valor TIFF está fuera de los límites "
-            "de la estructura TIFF: "
-            f"offset={value_offset}, "
-            f"tamaño={data_size}, "
-            f"longitud={len(data)}."
-        )
 
     return data[
         value_offset:value_end
@@ -374,6 +563,8 @@ def decode_ifd_value(
     data: bytes,
     entry: IfdEntry,
     byte_order: str,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> DecodedTiffValue:
     """
     Interpreta automáticamente una entrada IFD.
@@ -396,6 +587,7 @@ def decode_ifd_value(
         data,
         entry,
         byte_order,
+        limits=limits,
     )
 
     field_type = entry.field_type
@@ -505,6 +697,53 @@ def decode_ifd_value(
         "Tipo TIFF no soportado: "
         f"{field_type}."
     )
+
+
+def _validate_span(
+    *,
+    start: int,
+    length: int,
+    total_size: int,
+    context: str,
+) -> None:
+    """
+    Validate [start, start + length) without
+    trusting attacker-controlled arithmetic.
+
+    Python integers do not wrap, but checking
+    length against total_size - start avoids
+    constructing or accepting absurd spans.
+    """
+
+    if start < 0:
+        raise TiffParserError(
+            f"Offset negativo para {context}: "
+            f"{start}."
+        )
+
+    if length < 0:
+        raise TiffParserError(
+            f"Longitud negativa para {context}: "
+            f"{length}."
+        )
+
+    if start > total_size:
+        raise TiffParserError(
+            f"Offset fuera de límites para "
+            f"{context}: {start} > "
+            f"{total_size}."
+        )
+
+    if length > (
+        total_size - start
+    ):
+        raise TiffParserError(
+            f"Rango truncado o fuera de límites "
+            f"para {context}: "
+            f"offset={start}, "
+            f"tamaño={length}, "
+            f"longitud={total_size}."
+        )
 
 
 def _validate_byte_order(

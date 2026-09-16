@@ -9,6 +9,10 @@ from photometa.parsers.jpeg import (
     JpegSegment,
     iter_jpeg_segments,
 )
+from photometa.parsers.limits import (
+    DEFAULT_PARSER_LIMITS,
+    ParserLimits,
+)
 
 
 XMP_IDENTIFIER = (
@@ -302,6 +306,8 @@ def is_extended_xmp_segment(
 
 def parse_xmp_segment(
     segment: JpegSegment,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> XmpMetadata:
     """
     Extrae y analiza un paquete XMP APP1.
@@ -332,6 +338,31 @@ def parse_xmp_segment(
             "El paquete XMP está vacío."
         )
 
+    if (
+        len(xml_bytes)
+        > limits.max_xmp_packet_bytes
+    ):
+        raise XmpParserError(
+            "El paquete XMP excede el "
+            "límite de seguridad: "
+            f"{len(xml_bytes)} bytes > "
+            f"{limits.max_xmp_packet_bytes} bytes."
+        )
+
+    upper_xml = (
+        xml_bytes.upper()
+    )
+
+    if (
+        b"<!DOCTYPE" in upper_xml
+        or b"<!ENTITY" in upper_xml
+    ):
+        raise XmpParserError(
+            "El paquete XMP contiene "
+            "declaraciones DTD/ENTITY no "
+            "permitidas por PhotoMeta."
+        )
+
     try:
         packet_xml = xml_bytes.decode(
             "utf-8-sig"
@@ -353,9 +384,27 @@ def parse_xmp_segment(
             f"XML XMP inválido: {exc}"
         ) from exc
 
+    node_count = 0
+
+    for _element in root.iter():
+
+        node_count += 1
+
+        if (
+            node_count
+            > limits.max_xmp_xml_nodes
+        ):
+            raise XmpParserError(
+                "El árbol XMP excede el "
+                "límite de nodos XML: "
+                f"{node_count} > "
+                f"{limits.max_xmp_xml_nodes}."
+            )
+
     properties = (
         _extract_xmp_properties(
-            root
+            root,
+            limits=limits,
         )
     )
 
@@ -369,6 +418,8 @@ def parse_xmp_segment(
 
 def extract_xmp_from_jpeg(
     path: str | Path,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> XmpMetadata | None:
     """
     Devuelve el primer paquete XMP estándar
@@ -378,14 +429,16 @@ def extract_xmp_from_jpeg(
     """
 
     for segment in iter_jpeg_segments(
-        path
+        path,
+        limits=limits,
     ):
 
         if is_xmp_segment(
             segment
         ):
             return parse_xmp_segment(
-                segment
+                segment,
+                limits=limits,
             )
 
     return None
@@ -393,6 +446,8 @@ def extract_xmp_from_jpeg(
 
 def extract_all_xmp_from_jpeg(
     path: str | Path,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> tuple[XmpMetadata, ...]:
     """
     Extrae todos los paquetes XMP estándar
@@ -404,7 +459,8 @@ def extract_all_xmp_from_jpeg(
     ] = []
 
     for segment in iter_jpeg_segments(
-        path
+        path,
+        limits=limits,
     ):
 
         if is_xmp_segment(
@@ -412,7 +468,8 @@ def extract_all_xmp_from_jpeg(
         ):
             metadata.append(
                 parse_xmp_segment(
-                    segment
+                    segment,
+                    limits=limits,
                 )
             )
 
@@ -421,6 +478,8 @@ def extract_all_xmp_from_jpeg(
 
 def has_extended_xmp(
     path: str | Path,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> bool:
 
     return any(
@@ -428,17 +487,40 @@ def has_extended_xmp(
             segment
         )
         for segment
-        in iter_jpeg_segments(path)
+        in iter_jpeg_segments(
+            path,
+            limits=limits,
+        )
     )
 
 
 def _extract_xmp_properties(
     root: ET.Element,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> list[XmpProperty]:
 
     properties: list[
         XmpProperty
     ] = []
+
+    def add_property(
+        property_: XmpProperty,
+    ) -> None:
+
+        if (
+            len(properties)
+            >= limits.max_xmp_properties
+        ):
+            raise XmpParserError(
+                "El paquete XMP excede el "
+                "límite de propiedades: "
+                f"{limits.max_xmp_properties}."
+            )
+
+        properties.append(
+            property_
+        )
 
     for description in root.iter(
         RDF_DESCRIPTION
@@ -457,7 +539,7 @@ def _extract_xmp_properties(
             if attribute_name == RDF_ABOUT:
                 continue
 
-            properties.append(
+            add_property(
                 _create_property(
                     attribute_name,
                     attribute_value,
@@ -465,9 +547,7 @@ def _extract_xmp_properties(
             )
 
         #
-        # Otras aparecen como elementos,
-        # por ejemplo dc:title,
-        # dc:creator y dc:description.
+        # Otras aparecen como elementos.
         #
         for child in description:
 
@@ -480,7 +560,7 @@ def _extract_xmp_properties(
             if value is None:
                 continue
 
-            properties.append(
+            add_property(
                 _create_property(
                     child.tag,
                     value,
@@ -488,7 +568,6 @@ def _extract_xmp_properties(
             )
 
     return properties
-
 
 def _extract_element_value(
     element: ET.Element,

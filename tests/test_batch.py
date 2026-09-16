@@ -316,6 +316,85 @@ class TestBatchAnalysis(
             1,
         )
 
+    def test_security_limit_does_not_stop_batch(
+        self,
+    ):
+
+        root = self.make_temp_dir()
+
+        good_data = (
+            create_jpeg()
+        )
+
+        (
+            root
+            / "good.jpg"
+        ).write_bytes(
+            good_data
+        )
+
+        #
+        # Thousands of individually valid
+        # zero-payload APP1 segments.
+        #
+        # The JPEG remains recognizable,
+        # but exceeds PhotoMeta's defensive
+        # segment budget.
+        #
+        hostile_data = (
+            good_data[:2]
+            + (
+                b"\xFF\xE1\x00\x02"
+                * 5000
+            )
+            + good_data[2:]
+        )
+
+        (
+            root
+            / "segment-bomb.jpg"
+        ).write_bytes(
+            hostile_data
+        )
+
+        report = (
+            analyze_directory(
+                root
+            )
+        )
+
+        self.assertEqual(
+            report.total_files,
+            2,
+        )
+
+        self.assertEqual(
+            report.jpeg_count,
+            2,
+        )
+
+        self.assertEqual(
+            report.analyzed_jpeg_count,
+            1,
+        )
+
+        self.assertEqual(
+            report.failed_jpeg_count,
+            1,
+        )
+
+        failed = next(
+            item
+            for item
+            in report.items
+            if item.error is not None
+        )
+
+        self.assertIn(
+            "límite de segmentos JPEG",
+            failed.error,
+        )
+
     def test_empty_directory_is_valid(
         self,
     ):

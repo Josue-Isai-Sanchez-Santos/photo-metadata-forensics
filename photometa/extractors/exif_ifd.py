@@ -12,14 +12,19 @@ from photometa.parsers.exif import (
 from photometa.parsers.jpeg import (
     iter_jpeg_segments,
 )
+from photometa.parsers.limits import (
+    DEFAULT_PARSER_LIMITS,
+    ParserLimits,
+)
 from photometa.parsers.tags import (
     get_exif_tag_name,
 )
 from photometa.parsers.tiff import (
     DecodedTiffValue,
     Ifd,
+    IfdTraversalState,
     decode_ifd_value,
-    parse_ifd,
+    parse_ifd_guarded,
 )
 
 
@@ -110,6 +115,8 @@ class CaptureSummary:
 
 def _get_exif_ifd_pointer(
     exif: ExifData,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> int:
 
     pointer_entry = next(
@@ -130,6 +137,7 @@ def _get_exif_ifd_pointer(
         exif.tiff_data,
         pointer_entry,
         exif.header.byte_order,
+        limits=limits,
     )
 
     if not isinstance(value, int):
@@ -148,31 +156,44 @@ def _get_exif_ifd_pointer(
 
 def parse_exif_ifd(
     exif: ExifData,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> Ifd:
     """
     Sigue ExifIFDPointer desde IFD0.
     """
 
     offset = _get_exif_ifd_pointer(
-        exif
+        exif,
+        limits=limits,
     )
 
-    return parse_ifd(
+    state = IfdTraversalState.create(
+        root_offset=exif.ifd0.offset,
+    )
+
+    return parse_ifd_guarded(
         exif.tiff_data,
         offset,
         exif.header.byte_order,
+        state=state,
+        depth=1,
+        limits=limits,
     )
 
 
 def extract_exif_ifd_metadata(
     exif: ExifData,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> ExifIfdMetadata:
     """
     Decodifica las entradas del ExifIFD.
     """
 
     exif_ifd = parse_exif_ifd(
-        exif
+        exif,
+        limits=limits,
     )
 
     entries: list[
@@ -185,6 +206,7 @@ def extract_exif_ifd_metadata(
             exif.tiff_data,
             entry,
             exif.header.byte_order,
+            limits=limits,
         )
 
         entries.append(
@@ -210,6 +232,8 @@ def extract_exif_ifd_metadata(
 
 def extract_exif_ifd_from_jpeg(
     path: str | Path,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> ExifIfdMetadata:
     """
     Extrae ExifIFD directamente desde un JPEG.
@@ -218,7 +242,10 @@ def extract_exif_ifd_from_jpeg(
     exif_segment = next(
         (
             segment
-            for segment in iter_jpeg_segments(path)
+            for segment in iter_jpeg_segments(
+                path,
+                limits=limits,
+            )
             if segment.is_exif
         ),
         None,
@@ -231,11 +258,13 @@ def extract_exif_ifd_from_jpeg(
         )
 
     exif = parse_exif(
-        exif_segment
+        exif_segment,
+        limits=limits,
     )
 
     return extract_exif_ifd_metadata(
-        exif
+        exif,
+        limits=limits,
     )
 
 

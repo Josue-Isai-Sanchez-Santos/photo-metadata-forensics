@@ -7,6 +7,10 @@ from photometa.parsers.jpeg import (
     JpegSegment,
     iter_jpeg_segments,
 )
+from photometa.parsers.limits import (
+    DEFAULT_PARSER_LIMITS,
+    ParserLimits,
+)
 
 
 ICC_IDENTIFIER = b"ICC_PROFILE\x00"
@@ -143,6 +147,8 @@ def is_icc_segment(
 
 def parse_icc_chunk(
     segment: JpegSegment,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> IccChunk:
     """
     Analiza la cabecera específica del
@@ -207,6 +213,31 @@ def parse_icc_chunk(
             "que el total de fragmentos."
         )
 
+    if (
+        total_chunks
+        > limits.max_icc_chunks
+    ):
+        raise IccParserError(
+            "El perfil ICC declara demasiados "
+            "fragmentos: "
+            f"{total_chunks} > "
+            f"{limits.max_icc_chunks}."
+        )
+
+    chunk_data_size = (
+        len(segment.payload)
+        - header_size
+    )
+
+    if (
+        chunk_data_size
+        > limits.max_icc_profile_bytes
+    ):
+        raise IccParserError(
+            "Un fragmento ICC excede el "
+            "presupuesto máximo del perfil."
+        )
+
     return IccChunk(
         sequence_number=sequence_number,
         total_chunks=total_chunks,
@@ -218,6 +249,8 @@ def parse_icc_chunk(
 
 def extract_icc_chunks_from_jpeg(
     path: str | Path,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> tuple[IccChunk, ...]:
     """
     Extrae todos los fragmentos APP2 ICC.
@@ -228,15 +261,27 @@ def extract_icc_chunks_from_jpeg(
     ] = []
 
     for segment in iter_jpeg_segments(
-        path
+        path,
+        limits=limits,
     ):
 
         if is_icc_segment(
             segment
         ):
+
+            if (
+                len(chunks)
+                >= limits.max_icc_chunks
+            ):
+                raise IccParserError(
+                    "Se excedió el límite de "
+                    "fragmentos ICC."
+                )
+
             chunks.append(
                 parse_icc_chunk(
-                    segment
+                    segment,
+                    limits=limits,
                 )
             )
 
@@ -245,6 +290,8 @@ def extract_icc_chunks_from_jpeg(
 
 def reassemble_icc_chunks(
     chunks: tuple[IccChunk, ...],
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> bytes:
     """
     Reconstruye un perfil ICC dividido
@@ -257,9 +304,27 @@ def reassemble_icc_chunks(
             "para reconstruir."
         )
 
+    if (
+        len(chunks)
+        > limits.max_icc_chunks
+    ):
+        raise IccParserError(
+            "Se excedió el límite de "
+            "fragmentos ICC."
+        )
+
     expected_total = (
         chunks[0].total_chunks
     )
+
+    if (
+        expected_total
+        > limits.max_icc_chunks
+    ):
+        raise IccParserError(
+            "El perfil ICC declara demasiados "
+            "fragmentos."
+        )
 
     for chunk in chunks:
 
@@ -321,6 +386,35 @@ def reassemble_icc_chunks(
             "ICC está incompleta."
         )
 
+    total_bytes = 0
+
+    for sequence in range(
+        1,
+        expected_total + 1,
+    ):
+
+        chunk_size = len(
+            by_sequence[
+                sequence
+            ].data
+        )
+
+        if (
+            chunk_size
+            > (
+                limits.max_icc_profile_bytes
+                - total_bytes
+            )
+        ):
+            raise IccParserError(
+                "El perfil ICC reconstruido "
+                "excede el límite de seguridad."
+            )
+
+        total_bytes += (
+            chunk_size
+        )
+
     return b"".join(
         by_sequence[
             sequence
@@ -336,11 +430,22 @@ def reassemble_icc_chunks(
 def parse_icc_profile(
     data: bytes,
     chunk_count: int = 1,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> IccProfile:
     """
     Analiza el encabezado ICC y su
     tabla básica de tags.
     """
+
+    if (
+        len(data)
+        > limits.max_icc_profile_bytes
+    ):
+        raise IccParserError(
+            "El perfil ICC excede el "
+            "límite de seguridad."
+        )
 
     if len(data) < ICC_HEADER_SIZE:
         raise IccParserError(
@@ -356,6 +461,15 @@ def parse_icc_profile(
         raise IccParserError(
             "El tamaño declarado del "
             "perfil ICC es inválido."
+        )
+
+    if (
+        profile_size
+        > limits.max_icc_profile_bytes
+    ):
+        raise IccParserError(
+            "El tamaño declarado del perfil ICC "
+            "excede el límite de seguridad."
         )
 
     if profile_size > len(data):
@@ -387,7 +501,8 @@ def parse_icc_profile(
     )
 
     tags = _parse_tag_table(
-        profile_data
+        profile_data,
+        limits=limits,
     )
 
     profile_name = (
@@ -408,6 +523,8 @@ def parse_icc_profile(
 
 def extract_icc_profile_from_jpeg(
     path: str | Path,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> IccProfile | None:
     """
     Extrae y reconstruye el perfil ICC
@@ -418,7 +535,8 @@ def extract_icc_profile_from_jpeg(
 
     chunks = (
         extract_icc_chunks_from_jpeg(
-            path
+            path,
+            limits=limits,
         )
     )
 
@@ -426,12 +544,14 @@ def extract_icc_profile_from_jpeg(
         return None
 
     data = reassemble_icc_chunks(
-        chunks
+        chunks,
+        limits=limits,
     )
 
     return parse_icc_profile(
         data,
         chunk_count=len(chunks),
+        limits=limits,
     )
 
 
@@ -535,6 +655,8 @@ def _parse_icc_header(
 
 def _parse_tag_table(
     data: bytes,
+    *,
+    limits: ParserLimits = DEFAULT_PARSER_LIMITS,
 ) -> tuple[IccTagEntry, ...]:
 
     if len(data) < 132:
@@ -544,6 +666,17 @@ def _parse_tag_table(
         data[128:132],
         byteorder="big",
     )
+
+    if (
+        tag_count
+        > limits.max_icc_tags
+    ):
+        raise IccParserError(
+            "El perfil ICC declara demasiados "
+            "tags: "
+            f"{tag_count} > "
+            f"{limits.max_icc_tags}."
+        )
 
     table_end = (
         132
@@ -598,8 +731,11 @@ def _parse_tag_table(
             )
 
         if (
-            offset + size
-            > len(data)
+            size
+            > (
+                len(data)
+                - offset
+            )
         ):
             raise IccParserError(
                 f"Tag ICC truncado: "
