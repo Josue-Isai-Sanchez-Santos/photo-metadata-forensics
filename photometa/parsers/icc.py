@@ -12,7 +12,6 @@ from photometa.parsers.limits import (
     ParserLimits,
 )
 
-
 ICC_IDENTIFIER = b"ICC_PROFILE\x00"
 
 ICC_HEADER_SIZE = 128

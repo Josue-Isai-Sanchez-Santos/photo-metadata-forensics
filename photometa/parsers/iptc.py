@@ -13,7 +13,6 @@ from photometa.parsers.limits import (
     ParserLimits,
 )
 
-
 PHOTOSHOP_IDENTIFIER = (
     b"Photoshop 3.0\x00"
 )

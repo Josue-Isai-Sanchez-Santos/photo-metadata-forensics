@@ -13,19 +13,10 @@ from photometa.analysis.anomalies import (
     AnomalyAnalysisError,
     analyze_anomalies,
 )
-from photometa.presentation.anomalies import (
-    format_anomaly_report,
-)
-
 from photometa.analysis.batch import (
     BatchAnalysisError,
     analyze_directory,
 )
-from photometa.presentation.batch import (
-    format_batch_privacy_report,
-    format_batch_scan_report,
-)
-
 from photometa.analysis.comparison import (
     PRESENCE_NO,
     PRESENCE_UNKNOWN,
@@ -33,10 +24,6 @@ from photometa.analysis.comparison import (
     compare_images,
     inspect_image_for_comparison,
 )
-from photometa.presentation.comparison import (
-    format_comparison_report,
-)
-
 from photometa.analysis.privacy import (
     analyze_privacy,
 )
@@ -47,10 +34,51 @@ from photometa.analysis.report import (
     FullReportError,
     build_full_report,
 )
+from photometa.backends.exiftool_backend import (
+    ExifToolBackendError,
+    inspect_with_exiftool,
+)
+from photometa.exporters.csv_export import (
+    CsvExportError,
+    write_batch_csv,
+)
+from photometa.exporters.html_report import (
+    HtmlReportError,
+    write_html_report,
+)
+from photometa.exporters.json_export import (
+    JsonExportError,
+    build_batch_scan_json_document,
+    build_scan_json_document,
+    serialize_json_document,
+)
 from photometa.extractors.gps_ifd import (
     GpsIfdExtractorError,
     build_location_summary,
     extract_gps_ifd_from_jpeg,
+)
+from photometa.formats.heif_backend import (
+    HeifBackendUnavailable,
+    HeifInspectionError,
+    detect_heif_container,
+    inspect_heif_image,
+)
+from photometa.formats.pillow_backend import (
+    FORMAT_JPEG,
+    AdditionalFormatError,
+    detect_scan_format,
+    inspect_additional_image,
+)
+from photometa.formats.raw_backend import (
+    RawBackendUnavailable,
+    RawInspectionError,
+    inspect_raw_image,
+    is_raw_candidate_path,
+)
+from photometa.hashing import (
+    HashingError,
+    calculate_hash,
+    calculate_hashes,
 )
 from photometa.parsers.iptc import (
     IptcParserError,
@@ -62,9 +90,28 @@ from photometa.parsers.jpeg import (
 from photometa.parsers.xmp import (
     XmpParserError,
 )
+from photometa.presentation.additional_scan import (
+    format_additional_scan_report,
+)
+from photometa.presentation.anomalies import (
+    format_anomaly_report,
+)
+from photometa.presentation.batch import (
+    format_batch_privacy_report,
+    format_batch_scan_report,
+)
+from photometa.presentation.comparison import (
+    format_comparison_report,
+)
+from photometa.presentation.exiftool_scan import (
+    format_exiftool_scan_report,
+)
 from photometa.presentation.gps import (
     format_gps_raw_report,
     format_location_report,
+)
+from photometa.presentation.heif_scan import (
+    format_heif_scan_report,
 )
 from photometa.presentation.privacy import (
     format_privacy_detailed_report,
@@ -74,73 +121,15 @@ from photometa.presentation.privacy_score import (
     format_privacy_score,
     format_privacy_score_detailed,
 )
+from photometa.presentation.raw_scan import (
+    format_raw_scan_report,
+)
 from photometa.presentation.report import (
     format_full_report,
 )
 from photometa.presentation.scan import (
     format_scan_report,
     format_segment_report,
-)
-
-from photometa.exporters.csv_export import (
-    CsvExportError,
-    write_batch_csv,
-)
-
-from photometa.exporters.json_export import (
-    JsonExportError,
-    build_batch_scan_json_document,
-    build_scan_json_document,
-    serialize_json_document,
-)
-
-from photometa.exporters.html_report import (
-    HtmlReportError,
-    write_html_report,
-)
-
-from photometa.backends.exiftool_backend import (
-    ExifToolBackendError,
-    inspect_with_exiftool,
-)
-from photometa.presentation.exiftool_scan import (
-    format_exiftool_scan_report,
-)
-
-from photometa.formats.raw_backend import (
-    RawBackendUnavailable,
-    RawInspectionError,
-    is_raw_candidate_path,
-    inspect_raw_image,
-)
-from photometa.presentation.raw_scan import (
-    format_raw_scan_report,
-)
-
-from photometa.formats.heif_backend import (
-    HeifBackendUnavailable,
-    HeifInspectionError,
-    detect_heif_container,
-    inspect_heif_image,
-)
-from photometa.presentation.heif_scan import (
-    format_heif_scan_report,
-)
-
-from photometa.formats.pillow_backend import (
-    FORMAT_JPEG,
-    AdditionalFormatError,
-    detect_scan_format,
-    inspect_additional_image,
-)
-from photometa.presentation.additional_scan import (
-    format_additional_scan_report,
-)
-
-from photometa.hashing import (
-    HashingError,
-    calculate_hash,
-    calculate_hashes,
 )
 from photometa.sanitization.scrub import (
     ScrubError,
@@ -152,7 +141,6 @@ from photometa.sanitization.selective import (
     SelectiveScrubReport,
     scrub_jpeg_selective,
 )
-
 
 SCRUB_MODE_ALL = "all"
 

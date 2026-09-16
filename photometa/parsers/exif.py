@@ -15,7 +15,6 @@ from photometa.parsers.tiff import (
     parse_tiff_header,
 )
 
-
 EXIF_IDENTIFIER = b"Exif\x00\x00"
 
 

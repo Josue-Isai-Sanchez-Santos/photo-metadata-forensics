@@ -26,7 +26,6 @@ from photometa.parsers.xmp import (
     extract_xmp_from_jpeg,
 )
 
-
 SEVERITY_HIGH = "high"
 SEVERITY_MEDIUM = "medium"
 SEVERITY_LOW = "low"

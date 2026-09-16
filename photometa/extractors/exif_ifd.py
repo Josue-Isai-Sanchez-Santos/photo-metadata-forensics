@@ -27,7 +27,6 @@ from photometa.parsers.tiff import (
     parse_ifd_guarded,
 )
 
-
 EXIF_IFD_POINTER_TAG = 0x8769
 
 

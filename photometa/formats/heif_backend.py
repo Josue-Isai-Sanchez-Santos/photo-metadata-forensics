@@ -15,7 +15,6 @@ from photometa.interpretation.special_fields import (
     interpret_orientation,
 )
 
-
 FORMAT_HEIC = "HEIC"
 FORMAT_HEIF = "HEIF"
 

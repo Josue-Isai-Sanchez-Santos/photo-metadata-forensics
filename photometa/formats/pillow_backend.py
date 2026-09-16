@@ -16,7 +16,6 @@ from photometa.interpretation.special_fields import (
     interpret_orientation,
 )
 
-
 FORMAT_JPEG = "JPEG"
 
 SUPPORTED_PILLOW_FORMATS = {

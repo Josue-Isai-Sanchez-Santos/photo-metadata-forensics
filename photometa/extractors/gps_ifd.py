@@ -26,7 +26,6 @@ from photometa.parsers.tiff import (
     parse_ifd_guarded,
 )
 
-
 GPS_IFD_POINTER_TAG = 0x8825
 
 

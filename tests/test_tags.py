@@ -2,8 +2,8 @@ import unittest
 
 from photometa.parsers.tags import (
     get_exif_tag_name,
-    get_tiff_tag_name,
     get_gps_tag_name,
+    get_tiff_tag_name,
 )
 
 

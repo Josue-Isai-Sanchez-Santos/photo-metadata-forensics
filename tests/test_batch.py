@@ -19,7 +19,6 @@ from tests.test_selective_scrub import (
     xmp_segment,
 )
 
-
 PNG_SAMPLE = (
     b"\x89PNG\r\n\x1a\n"
     b"\x00\x00\x00\x0D"

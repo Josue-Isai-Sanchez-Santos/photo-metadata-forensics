@@ -18,17 +18,15 @@ from photometa.analysis.privacy_score import (
     LEVEL_MEDIUM,
     calculate_privacy_exposure_score,
 )
+from photometa.formats.heif_backend import (
+    detect_heif_container,
+)
 from photometa.formats.raw_backend import (
     RawBackendUnavailable,
     is_raw_candidate_path,
     probe_raw_file,
     raw_backend_available,
 )
-
-from photometa.formats.heif_backend import (
-    detect_heif_container,
-)
-
 from photometa.parsers.iptc import (
     IptcParserError,
 )
@@ -38,7 +36,6 @@ from photometa.parsers.jpeg import (
 from photometa.parsers.xmp import (
     XmpParserError,
 )
-
 
 FORMAT_JPEG = "JPEG"
 FORMAT_PNG = "PNG"

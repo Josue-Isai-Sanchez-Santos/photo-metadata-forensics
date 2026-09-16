@@ -9,7 +9,6 @@ from pathlib import Path
 import photometa.__main__ as package_main
 import photometa.cli as cli
 
-
 PROJECT_ROOT = (
     Path(__file__)
     .resolve()

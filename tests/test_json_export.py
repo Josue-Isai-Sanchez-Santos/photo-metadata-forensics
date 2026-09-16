@@ -18,7 +18,6 @@ from tests.test_comparison import (
     gps_segment,
 )
 
-
 PNG_SAMPLE = (
     b"\x89PNG\r\n\x1a\n"
     b"\x00\x00\x00\x0D"

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 TIFF_TAG_NAMES: dict[int, str] = {
     0x0100: "ImageWidth",
     0x0101: "ImageLength",

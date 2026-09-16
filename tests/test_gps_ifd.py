@@ -17,7 +17,6 @@ from photometa.parsers.jpeg import (
     JpegSegment,
 )
 
-
 TYPE_SIZES = {
     1: 1,
     2: 1,

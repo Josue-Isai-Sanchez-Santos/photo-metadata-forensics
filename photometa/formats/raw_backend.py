@@ -15,7 +15,6 @@ from photometa.hashing import (
     calculate_sha256,
 )
 
-
 FORMAT_RAW = "RAW"
 
 

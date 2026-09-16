@@ -8,7 +8,6 @@ from photometa.parsers.xmp import (
     XMP_IDENTIFIER,
 )
 
-
 OUTPUT_DIRECTORY = Path(
     "samples/private/security-corpus"
 )

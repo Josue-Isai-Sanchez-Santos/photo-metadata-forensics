@@ -27,11 +27,12 @@ from photometa.exporters.json_export import (
 )
 from photometa.formats.heif_backend import (
     FORMAT_HEIC,
-    FORMAT_HEIF as SINGLE_FORMAT_HEIF,
     detect_heif_container,
     inspect_heif_image,
 )
-
+from photometa.formats.heif_backend import (
+    FORMAT_HEIF as SINGLE_FORMAT_HEIF,
+)
 
 PILLOW_HEIF_AVAILABLE = (
     find_spec(

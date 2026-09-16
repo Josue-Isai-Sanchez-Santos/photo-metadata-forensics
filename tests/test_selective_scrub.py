@@ -9,10 +9,6 @@ from photometa.analysis.privacy import (
 from photometa.extractors.exif_ifd import (
     extract_exif_ifd_from_jpeg,
 )
-from photometa.extractors.gps_ifd import (
-    GpsIfdExtractorError,
-    extract_gps_ifd_from_jpeg,
-)
 from photometa.extractors.ifd0 import (
     extract_ifd0_from_jpeg,
 )

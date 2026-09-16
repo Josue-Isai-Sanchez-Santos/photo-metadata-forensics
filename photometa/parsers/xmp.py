@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias
 
+from defusedxml import ElementTree as DefusedET
+
 from photometa.parsers.jpeg import (
     JpegSegment,
     iter_jpeg_segments,
@@ -13,7 +15,6 @@ from photometa.parsers.limits import (
     DEFAULT_PARSER_LIMITS,
     ParserLimits,
 )
-
 
 XMP_IDENTIFIER = (
     b"http://ns.adobe.com/xap/1.0/\x00"
@@ -375,8 +376,11 @@ def parse_xmp_segment(
         ) from exc
 
     try:
-        root = ET.fromstring(
-            xml_bytes
+        root = DefusedET.fromstring(
+            xml_bytes,
+            forbid_dtd=True,
+            forbid_entities=True,
+            forbid_external=True,
         )
 
     except ET.ParseError as exc:

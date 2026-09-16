@@ -30,7 +30,6 @@ from photometa.presentation.raw_scan import (
     format_raw_scan_report,
 )
 
-
 RAWPY_AVAILABLE = (
     find_spec(
         "rawpy"

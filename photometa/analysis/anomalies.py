@@ -29,7 +29,6 @@ from photometa.parsers.tags import (
 )
 from photometa.parsers.tiff import (
     Ifd,
-    IfdEntry,
     TiffParserError,
     decode_ifd_value,
     get_ifd_entry_data_size,

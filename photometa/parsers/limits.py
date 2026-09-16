@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 MIB = 1024 * 1024
 GIB = 1024 * MIB
 

@@ -48,7 +48,6 @@ from photometa.parsers.xmp import (
     XmpParserError,
 )
 
-
 JSON_SCHEMA_VERSION = "1.0"
 
 

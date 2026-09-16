@@ -11,7 +11,6 @@ from photometa.analysis.batch import (
     BatchReport,
 )
 
-
 CSV_SCHEMA_VERSION = "1.0"
 
 CSV_COLUMNS = (

@@ -12,7 +12,6 @@ from photometa.hashing import (
     calculate_sha256,
 )
 
-
 BACKEND_NAME = "exiftool"
 
 DEFAULT_TIMEOUT_SECONDS = 30

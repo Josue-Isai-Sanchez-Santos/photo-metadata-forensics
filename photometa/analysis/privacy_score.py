@@ -8,7 +8,6 @@ from photometa.analysis.privacy import (
     analyze_privacy,
 )
 
-
 SCORE_VERSION = "1.0"
 
 LEVEL_LOW = "LOW"

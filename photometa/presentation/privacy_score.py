@@ -4,7 +4,6 @@ from photometa.analysis.privacy_score import (
     PrivacyExposureScore,
 )
 
-
 DEFAULT_BAR_WIDTH = 10
 
 

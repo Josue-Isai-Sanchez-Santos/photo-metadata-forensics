@@ -5,6 +5,9 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+from defusedxml import ElementTree as DefusedET
+from defusedxml.common import DefusedXmlException
+
 from photometa.analysis.privacy import (
     analyze_privacy,
 )
@@ -48,7 +51,6 @@ from photometa.sanitization.scrub import (
     _atomic_write,
     default_output_path,
 )
-
 
 SCRUB_MODE_GPS = "gps"
 SCRUB_MODE_PRIVACY = "privacy"
@@ -1265,11 +1267,17 @@ def _sanitize_xmp_payload(
 
     try:
 
-        root = ET.fromstring(
-            xml_data
+        root = DefusedET.fromstring(
+            xml_data,
+            forbid_dtd=True,
+            forbid_entities=True,
+            forbid_external=True,
         )
 
-    except ET.ParseError as exc:
+    except (
+        ET.ParseError,
+        DefusedXmlException,
+    ) as exc:
 
         raise ScrubError(
             "Cannot selectively sanitize "

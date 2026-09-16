@@ -7,7 +7,6 @@ from photometa.fileinfo import (
     format_file_size,
 )
 
-
 LABEL_WIDTH = 22
 VALUE_WIDTH = 28
 

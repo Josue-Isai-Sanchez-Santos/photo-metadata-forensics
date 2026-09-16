@@ -1,16 +1,9 @@
 from __future__ import annotations
 
-import hashlib
 import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-
-from photometa.sanitization.jpeg_rewriter import (
-    JpegRewriteError,
-    SegmentTransform,
-    rewrite_jpeg_bytes,
-)
 
 from photometa.extractors.gps_ifd import (
     GpsIfdExtractorError,
@@ -29,6 +22,11 @@ from photometa.parsers.icc import (
 from photometa.parsers.xmp import (
     EXTENDED_XMP_IDENTIFIER,
     XMP_IDENTIFIER,
+)
+from photometa.sanitization.jpeg_rewriter import (
+    JpegRewriteError,
+    SegmentTransform,
+    rewrite_jpeg_bytes,
 )
 
 

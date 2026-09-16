@@ -4,7 +4,6 @@ import hashlib
 from pathlib import Path
 from typing import Iterable
 
-
 DEFAULT_HASH_ALGORITHM = "sha256"
 
 SUPPORTED_HASH_ALGORITHMS = (

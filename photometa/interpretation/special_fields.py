@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 ORIENTATION_VALUES: dict[int, str] = {
     1: "Horizontal (normal)",
     2: "Mirror horizontal",
