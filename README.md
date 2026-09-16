@@ -44,24 +44,96 @@ PhotoMeta currently supports:
 
 PhotoMeta requires Python 3.11 or newer.
 
-    python -m venv .venv
+### Quick install with pipx
+
+For users who only want to use PhotoMeta, `pipx` is the recommended
+installation method because it keeps PhotoMeta isolated while making the
+`photometa` command available from any directory.
+
+With `pipx` already installed:
+
+    pipx install git+https://github.com/Josue-Isai-Sanchez-Santos/photo-metadata-forensics.git
+
+Verify the installation:
+
+    photometa --version
+
+    photometa --help
+
+After this installation, PhotoMeta can be used directly:
+
+    photometa scan photo.jpg
+
+    photometa privacy photo.jpg
+
+    photometa gps photo.jpg
+
+### Standard installation from source
+
+Clone the repository:
+
+    git clone https://github.com/Josue-Isai-Sanchez-Santos/photo-metadata-forensics.git
+
+    cd photo-metadata-forensics
+
+Create a virtual environment:
+
+    python3 -m venv .venv
+
+Linux, macOS or WSL:
+
     source .venv/bin/activate
+
+Windows PowerShell:
+
+    .\.venv\Scripts\Activate.ps1
+
+Install PhotoMeta:
+
     python -m pip install --upgrade pip
+
+    python -m pip install .
+
+Then:
+
+    photometa --help
+
+When using this installation method, activate the virtual environment again
+whenever a new terminal is opened.
+
+### Development installation
+
+Contributors who want changes in the source tree to become immediately
+available should use an editable installation:
+
     python -m pip install -e .
 
-Optional HEIC/HEIF support:
-
-    python -m pip install -e ".[heif]"
-
-Optional RAW support:
-
-    python -m pip install -e ".[raw]"
-
-Both:
+Optional development installation with all supported Python image backends:
 
     python -m pip install -e ".[heif,raw]"
 
-ExifTool is an optional external executable and must be installed separately.
+### Optional image backends
+
+HEIC / HEIF:
+
+    python -m pip install ".[heif]"
+
+RAW:
+
+    python -m pip install ".[raw]"
+
+Both:
+
+    python -m pip install ".[heif,raw]"
+
+ExifTool is an optional external executable and must be installed separately
+when using:
+
+    photometa scan FILE --backend exiftool
+
+For complete installation instructions, see:
+
+[Installation documentation](docs/installation.md)
 
 ## CLI
 
