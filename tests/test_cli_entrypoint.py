@@ -149,7 +149,7 @@ class TestCliEntrypoint(
 
         self.assertEqual(
             result.stdout.strip(),
-            "photometa 0.1.0",
+            "photometa 1.0.0",
         )
 
 

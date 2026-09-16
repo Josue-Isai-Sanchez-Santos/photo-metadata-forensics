@@ -50,7 +50,7 @@ Quick examples:
   photometa compare original.jpg copia.jpg
 
 Documentation:
-  docs/index.md
+  https://github.com/Josue-Isai-Sanchez-Santos/photo-metadata-forensics/blob/main/docs/index.md
 """
 
 

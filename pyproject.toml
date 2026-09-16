@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "photo-metadata-forensics"
-version = "0.1.0"
+version = "1.0.0"
+license = "MIT"
+license-files = ["LICENSE"]
 description = "Image metadata, privacy and forensic analysis toolkit."
 readme = "README.md"
 requires-python = ">=3.11"
