@@ -112,7 +112,16 @@ class TestCliEntrypoint(
         )
 
         self.assertIn(
-            "Image metadata and forensic",
+            "PHOTO METADATA FORENSICS",
+            result.stdout,
+        )
+
+        self.assertIn(
+            (
+                "Inspect image metadata, "
+                "privacy exposure and "
+                "forensic structure."
+            ),
             result.stdout,
         )
 

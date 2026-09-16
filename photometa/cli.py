@@ -100,6 +100,10 @@ from photometa.presentation.batch import (
     format_batch_privacy_report,
     format_batch_scan_report,
 )
+from photometa.presentation.branding import (
+    MAIN_HELP_EPILOG,
+    format_main_description,
+)
 from photometa.presentation.comparison import (
     format_comparison_report,
 )
@@ -175,8 +179,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="photometa",
         description=(
-            "Image metadata and forensic "
-            "analysis toolkit."
+            format_main_description()
+        ),
+        epilog=MAIN_HELP_EPILOG,
+        formatter_class=(
+            argparse.RawDescriptionHelpFormatter
         ),
     )
 
@@ -191,6 +198,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands = parser.add_subparsers(
         dest="command",
+        title="Commands",
+        metavar="COMMAND",
     )
 
     scan_parser = commands.add_parser(
